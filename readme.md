@@ -1,1 +1,1 @@
-1. [HDFS学习](notes/Hadoop/Hadoop-HDFS.md)
+1. [HDFS学习](Hadoop/Hadoop-HDFS.md)
