@@ -6,7 +6,7 @@ Yarn是一个资源调度平台，负责为运算程序提供服务器运算资�
 
 ## 二、Yarn基本框架 
 
-![image-20200713232247038](.\Hadoop-Yarn.assets\image-20200713232247038.png)
+![image-20200713232247038](https://gitee.com/wangzj6666666/bigdata-img/raw/master/hadoop-yarn/image-20200713232247038.png)
 
 1）Resource Manager(RM)
 
@@ -43,7 +43,7 @@ Yarn是一个资源调度平台，负责为运算程序提供服务器运算资�
 
 ## 三、Yarn工作机制
 
-![image-20200713232319577](.\Hadoop-Yarn.assets\image-20200713232319577.png)
+![image-20200713232319577](https://gitee.com/wangzj6666666/bigdata-img/raw/master/hadoop-yarn/image-20200713232319577.png)
 
 1）MR程序提交到客户端所在的节点。
 

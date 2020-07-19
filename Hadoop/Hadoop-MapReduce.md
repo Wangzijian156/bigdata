@@ -92,7 +92,7 @@ ReduceTask：负责Reduce阶段的整个数据处理流程
 
 ### 3.1、MapReduce数据流
 
-![image-20200713211359146](.\Hadoop-MapReduce.assets\image-20200713211359146.png)
+![image-20200713211359146](https://gitee.com/wangzj6666666/bigdata-img/raw/master/hadoop-mr/image-20200713211359146.png)
 
 ### 3.2、切片与MapTask并行度决定机制
 
@@ -152,7 +152,7 @@ CombineTextInputFormat.setMaxInputSplitSize(job, 2000000);
 
 ## 四、MapTask
 
-![image-20200713204612035](.\Hadoop-MapReduce.assets\image-20200713204612035.png)
+![image-20200713204612035](https://gitee.com/wangzj6666666/bigdata-img/raw/master/hadoop-mr/image-20200713204612035.png)
 
 
 
@@ -204,7 +204,7 @@ maptask -           shuffle        -reducetask
 
 ### 5.1、shuffle总流程图
 
-![image-20200713214725558](.\Hadoop-MapReduce.assets\image-20200713214725558.png)
+![image-20200713214725558](https://gitee.com/wangzj6666666/bigdata-img/raw/master/hadoop-mr/image-20200713214725558.png)
 
 
 
@@ -288,7 +288,7 @@ maptask -           shuffle        -reducetask
 
 ### 6.1、ReduceTask工作机制
 
-![image-20200713214110573](.\Hadoop-MapReduce.assets\image-20200713214110573.png)
+![image-20200713214110573](https://gitee.com/wangzj6666666/bigdata-img/raw/master/hadoop-mr/image-20200713214110573.png)
 
 1）Copy阶段：ReduceTask从各个MapTask上远程拷贝一片数据，并针对某一片数据，如果其大小超过一定阈值，则写到磁盘上，否则直接放到内存中。
 
