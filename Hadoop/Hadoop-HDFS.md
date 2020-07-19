@@ -30,7 +30,7 @@
 
 ### 1.4、组成架构
 
- ![image-20200712221213208](https://gitee.com/wangzj6666666/bigdata-img/blob/master/hadoop-hdfs/image-20200712221213208.png)
+ ![image-20200712221213208](https://gitee.com/wangzj6666666/bigdata-img/raw/master/hadoop-hdfs/image-20200712221213208.png)
 
 1）NameNode（leader，缩写NN）
 
@@ -85,7 +85,7 @@
 
 ### 2.1、写操作流程
 
-![image-20200712212718140](https://gitee.com/wangzj6666666/bigdata-img/blob/master/hadoop-hdfs/image-20200712212718140.png)
+![image-20200712212718140](https://gitee.com/wangzj6666666/bigdata-img/raw/master/hadoop-hdfs/image-20200712212718140.png)
 
 1）客户端通过Distributed FileSystem模块向NameNode请求上传文件，NameNode检查目标文件是否已存在，父目录是否存在。
 
@@ -109,7 +109,7 @@
 
 在HDFS写数据的过程中，NameNode会选择距离待上传数据最近距离的DataNode接收数据。那么这个最近距离怎么计算呢？
 
-![image-20200712213336527](https://gitee.com/wangzj6666666/bigdata-img/blob/master/hadoop-hdfs/image-20200712213336527.png)
+![image-20200712213336527](https://gitee.com/wangzj6666666/bigdata-img/raw/master/hadoop-hdfs/image-20200712213336527.png)
 
 **节点距离：两个节点到达最近的共同祖先的距离总和**
 
@@ -124,7 +124,7 @@
 
 机架感知（副本存储节点选择）
 
-![image-20200712214150027](https://gitee.com/wangzj6666666/bigdata-img/blob/master/hadoop-hdfs/image-20200712214150027.png)
+![image-20200712214150027](https://gitee.com/wangzj6666666/bigdata-img/raw/master/hadoop-hdfs/image-20200712214150027.png)
 
 1）第一个副本在client所处的节点上，如果client在集群外，随机选一个
 
@@ -136,7 +136,7 @@
 
 ### 2.4、HDFS读数据流程
 
-![image-20200712213101011](https://gitee.com/wangzj6666666/bigdata-img/blob/master/hadoop-hdfs/image-20200712213101011.png)
+![image-20200712213101011](https://gitee.com/wangzj6666666/bigdata-img/raw/master/hadoop-hdfs/image-20200712213101011.png)
 
 1）客户端通过Distributed FileSystem向NameNode请求下载文件，NameNode通过查询元数据，找到文件块所在的DataNode地址。
 
@@ -170,7 +170,7 @@ NameNode中的元数据是如何存储的？
 - 如果长时间添加数据到Edits中，会导致该文件数据过大，效率降低，而且一旦断电，恢复元数据需要的时间过长。因此，需要定期进行FsImage和Edits的合并，如果这个操作   由NN节点完成，又会效率过低。因此，引入2NN。
 ```
 
-![image-20200712223114416](https://gitee.com/wangzj6666666/bigdata-img/blob/master/hadoop-hdfs/image-20200712223114416.png)
+![image-20200712223114416](https://gitee.com/wangzj6666666/bigdata-img/raw/master/hadoop-hdfs/image-20200712223114416.png)
 
 第一阶段：NameNode启动
 
@@ -254,7 +254,7 @@ drwxrwxr-x. 3 atguigu atguigu 4096 12月 11 08:03 name2
 
 ### 4.1、DataNode工作机制
 
-![image-20200712224322961](https://gitee.com/wangzj6666666/bigdata-img/blob/master/hadoop-hdfs/image-20200712224322961.png)
+![image-20200712224322961](https://gitee.com/wangzj6666666/bigdata-img/raw/master/hadoop-hdfs/image-20200712224322961.png)
 
 1）一个数据块在DataNode上以文件形式存储在磁盘上，包括两个文件，一个是数据本身，一个是元数据包括数据块的长度，块数据的校验和，以及时间戳。
 
@@ -283,7 +283,7 @@ drwxrwxr-x. 3 atguigu atguigu 4096 12月 11 08:03 name2
 
 ### 4.3、掉线时限参数设置
 
-![image-20200712225303668](https://gitee.com/wangzj6666666/bigdata-img/blob/master/hadoop-hdfs/image-20200712225303668.png)
+![image-20200712225303668](https://gitee.com/wangzj6666666/bigdata-img/raw/master/hadoop-hdfs/image-20200712225303668.png)
 
 1）DataNode进程死亡或者网络故障造成DataNode无法与NameNode通信；
 
@@ -416,7 +416,7 @@ hadoop105
 
 3）在web端查看DN状态，105 正在退役中…进行数据的迁移
 
-![image-20200712231014228](https://gitee.com/wangzj6666666/bigdata-img/blob/master/hadoop-hdfs/image-20200712231014228.png)
+![image-20200712231014228](https://gitee.com/wangzj6666666/bigdata-img/raw/master/hadoop-hdfs/image-20200712231014228.png)
 
 
 
