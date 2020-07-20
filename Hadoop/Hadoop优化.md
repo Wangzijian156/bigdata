@@ -196,8 +196,12 @@ MapReduce优化方法主要从六个方面考虑：数据输入、Map阶段、Re
 - 增加每个Reduce去Map中拿数据的并行数
 - 集群性能可以的前提下，增大Reduce端存储数据内存的大小
 
-```
-默认情况下，数据达到一个阈值的时候，Buffer中的数据就会写入磁盘，然后Reduce会从磁盘中获得所有的数据。也就是说，Buffer和Reduce是没有直接关联的，中间多次写磁盘->读磁盘的过程，既然有这个弊端，那么就可以通过参数来配置，使得Buffer中的一部分数据可以直接输送到Reduce，从而减少IO开销：mapreduce.reduce.input.buffer.percent，默认为0.0。当值大于0的时候，会保留指定比例的内存读Buffer中的数据直接拿给Reduce使用。这样一来，设置Buffer需要内存，读取数据需要内存，Reduce计算也要内存，所以要根据作业的运行情况进行调整。
+```txt
+默认情况下，数据达到一个阈值的时候，Buffer中的数据就会写入磁盘，然后Reduce会从磁盘中获得所有的数据。
+也就是说，Buffer和Reduce是没有直接关联的，中间多次写磁盘->读磁盘的过程，既然有这个弊端，那么就可以通过参数来配置，
+使得Buffer中的一部分数据可以直接输送到Reduce，从而减少IO开销：mapreduce.reduce.input.buffer.percent，默认为0.0。
+当值大于0的时候，会保留指定比例的内存读Buffer中的数据直接拿给Reduce使用。这样一来，设置Buffer需要内存，读取数据需要内存，
+Reduce计算也要内存，所以要根据作业的运行情况进行调整。
 ```
 
 
@@ -233,7 +237,7 @@ MapReduce优化方法主要从六个方面考虑：数据输入、Map阶段、Re
 
 9）在hdfs-site.xml文件中配置多目录（多磁盘）
 
-10）NameNode有一个工作线程池，用来处理不同DataNode的并发心跳以及客户端并发的元数据操作。dfs.namenode.handler.count=![img](E:\projoect\bigdata\Hadoop\Hadoop优化.assets\clip_image002.gif)，，比如集群规模为8台时，此参数设置为41。可通过简单的python代码计算该值，代码如下。
+10）NameNode有一个工作线程池，用来处理不同DataNode的并发心跳以及客户端并发的元数据操作。dfs.namenode.handler.count=![img](https://gitee.com/wangzj6666666/bigdata-img/raw/master/hadoop-optimizing/clip_image002.gif)，，比如集群规模为8台时，此参数设置为41。可通过简单的python代码计算该值，代码如下。
 
 ```shell
 [atguigu@hadoop102 ~]$ python
