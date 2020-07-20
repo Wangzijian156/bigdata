@@ -195,7 +195,7 @@ CAP3进2：CAP3进2理论就是说在分布式存储系统中，最多只能实�
 
  CA -> 传统Oracle数据库
 
-![image-20200714211158473](https://gitee.com/wangzj6666666/bigdata-img/blob/master/nosql/image-20200714211158473.png)
+![image-20200714211158473](https://gitee.com/wangzj6666666/bigdata-img/raw/master/nosql/image-20200714211158473.png)
 
 
 

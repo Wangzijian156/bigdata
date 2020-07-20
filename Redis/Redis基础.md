@@ -90,11 +90,11 @@ Redis是用C语言开发的，遵循BSD协议，是一个高性能的（Key/Valu
 
 9）用客户端访问：redis-cli
 
-![image-20200714222523582](.\Redis基础.assets\image-20200714222523582.png)
+![image-20200714222523582](https://gitee.com/wangzj6666666/bigdata-img/raw/master/redis//image-20200714222523582.png)
 
 10）ping
 
-![image-20200714222545754](.\Redis基础.assets\image-20200714222545754.png)
+![image-20200714222545754](https://gitee.com/wangzj6666666/bigdata-img/raw/master/redis//image-20200714222545754.png)
 
 
 
@@ -276,13 +276,13 @@ Redis的Set是string类型的无序集合。它底层其实是一个value为null
 
 hash实例：用户ID为查找的key，存储的value用户对象包含姓名，年龄，生日等信息，如果用普通的key/value结构来存储，主要有以下2种存储方式：
 
-![image-20200716123304310](.\Redis基础.assets\image-20200716123304310.png)
+![image-20200716123304310](https://gitee.com/wangzj6666666/bigdata-img/raw/master/redis//image-20200716123304310.png)
 
 方法一：每次修改用户的某个属性需要，先反序列化改好后再序列化回去。开销较大
 
 方法二：用户ID数据冗余
 
-![image-20200716123426306](.\Redis基础.assets\image-20200716123426306.png)
+![image-20200716123426306](https://gitee.com/wangzj6666666/bigdata-img/raw/master/redis//image-20200716123426306.png)
 
 方法三：通过 key(用户ID) + field(属性标签) 就可以操作对应属性数据了，既不需要重复存储数据，也不会带来序列化和并发修改控制的问题
 
