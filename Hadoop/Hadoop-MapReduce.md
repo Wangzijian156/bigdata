@@ -171,13 +171,15 @@ MapTask通过用户编写的RecordReader，从输入InputSplit中解析出一个
 3）Collect收集阶段
 
 ```txt
-在用户编写map()函数中，当数据处理完成后，一般会调用OutputCollector.collect()输出结果。在该函数内部，它会将生成的key/value分区（调用Partitioner），并写入一个环形内存缓冲区中
+在用户编写map()函数中，当数据处理完成后，一般会调用OutputCollector.collect()输出结果。
+在该函数内部，它会将生成的key/value分区（调用Partitioner），并写入一个环形内存缓冲区中
 ```
 
 4）Spill阶段
 
 ```txt
-即“溢写”，当环形缓冲区满后，MapReduce会将数据写到本地磁盘上，生成一个临时文件。需要注意的是，将数据写入本地磁盘之前，先要对数据进行一次本地排序，并在必要时对数据进行合并、压缩等操作。
+即“溢写”，当环形缓冲区满后，MapReduce会将数据写到本地磁盘上，生成一个临时文件。需要注意的是，
+将数据写入本地磁盘之前，先要对数据进行一次本地排序，并在必要时对数据进行合并、压缩等操作。
 ```
 
 步骤：
@@ -325,7 +327,7 @@ maptask -           shuffle        -reducetask
 - Reduce阶段压力过大，且容易产生数据倾斜
 
 解决方式：Map Join
- 
+
 
 2）Map Join
 
@@ -337,7 +339,7 @@ maptask -           shuffle        -reducetask
 
 - 在Mapper的setup阶段，将文件读取到缓存集合中
 - 在驱动函数中加载缓存
-   
+  
 
 ## 八、数据清理
 
