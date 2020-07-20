@@ -28,6 +28,12 @@
 
 ## 第九章、Redis知识点总结
 
+### 9.1、[NoSQL简介](Redis/NoSQL.md)
+
+### 9.2、[Redis基础](Redis/Redis基础.md)
+
+### 9.3、[Redis高级](Redis/Redis高级.md)
+
 ## 第十章、离线数仓
 
 ## 第十一章、实时数仓
