@@ -1,5 +1,18 @@
 # Redis基础
 
+- [Redis基础](#redis基础)
+	- [一、Redis简介](#一redis简介)
+		- [1.1、什么是Redis](#11什么是redis)
+		- [1.2、Redis与Memcache的区别](#12redis与memcache的区别)
+		- [1.3、Redis与HBase的区别](#13redis与hbase的区别)
+		- [1.4、Redis能干嘛](#14redis能干嘛)
+	- [二、Redis安装与启动](#二redis安装与启动)
+	- [三、Redis基本操作](#三redis基本操作)
+		- [3.1、Redis的数据库与选择](#31redis的数据库与选择)
+		- [3.2、Redis五大数据类型](#32redis五大数据类型)
+		- [3.3、常见配置](#33常见配置)
+		- [3.4、Jedis的使用](#34jedis的使用)
+
 ## 一、Redis简介
 
 ### 1.1、什么是Redis

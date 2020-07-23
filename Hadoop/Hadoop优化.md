@@ -1,6 +1,21 @@
 # Hadoop优化
 
-[toc]
+- [Hadoop优化](#hadoop优化)
+	- [一、数据压缩](#一数据压缩)
+		- [1.1、数据压缩概述](#11数据压缩概述)
+		- [1.2、压缩策略和原则](#12压缩策略和原则)
+		- [1.3、MR支持的压缩编码](#13mr支持的压缩编码)
+		- [1.4、压缩方式选择](#14压缩方式选择)
+		- [1.5、压缩位置选择](#15压缩位置选择)
+	- [二、Hadoop企业优化](#二hadoop企业优化)
+		- [2.1、MapReduce跑得慢](#21mapreduce跑得慢)
+		- [2.2、MapReduce数据输入优化](#22mapreduce数据输入优化)
+		- [2.3、MapReduce-Map阶段优化](#23mapreduce-map阶段优化)
+		- [2.3、MapReduceMap-Reduce阶段优化](#23mapreducemap-reduce阶段优化)
+		- [2.4、MapReduceMap-IO传输优化](#24mapreducemap-io传输优化)
+		- [2.5、Hadoop整体优化](#25hadoop整体优化)
+		- [2.6、数据倾斜问题](#26数据倾斜问题)
+		- [2.7、小文件优化](#27小文件优化)
 
 
 

@@ -1,6 +1,30 @@
 # Hadoop-MapReduce
 
-[toc]
+- [Hadoop-MapReduce](#hadoop-mapreduce)
+	- [一、基本概念](#一基本概念)
+		- [1.1、定义](#11定义)
+		- [1.2、特点](#12特点)
+		- [1.3、MapReduce核心编程思想](#13mapreduce核心编程思想)
+		- [1.4、MapReduce进程](#14mapreduce进程)
+		- [1.5、WordCount三阶段](#15wordcount三阶段)
+	- [二、Hadoop序列化](#二hadoop序列化)
+	- [三、FileInputFormat数据输入](#三fileinputformat数据输入)
+		- [3.1、MapReduce数据流](#31mapreduce数据流)
+		- [3.2、切片与MapTask并行度决定机制](#32切片与maptask并行度决定机制)
+		- [3.3、FileInputFormat切片机制](#33fileinputformat切片机制)
+		- [3.4、CombineTextInputFormat切片机制](#34combinetextinputformat切片机制)
+		- [3.5、数据读取](#35数据读取)
+	- [四、MapTask](#四maptask)
+	- [五、Shuffle](#五shuffle)
+		- [5.1、shuffle总流程图](#51shuffle总流程图)
+		- [5.2、Partition分区](#52partition分区)
+		- [5.3、WritableComparable排序](#53writablecomparable排序)
+		- [5.4、Combiner](#54combiner)
+	- [六、ReduceTask](#六reducetask)
+		- [6.1、ReduceTask工作机制](#61reducetask工作机制)
+		- [6.2、OutputFormat](#62outputformat)
+	- [七、Join机制](#七join机制)
+	- [八、数据清理](#八数据清理)
 
 
 
