@@ -38,6 +38,6 @@
 
 ### 10.1、[ElasticSearch简介](ES/ElasticSearch.md)
 
-### 10.2、[ElasticSearch基础](ES/ES Restful API (DSL) 基础.md)
+### 10.2、[ElasticSearch基础](ES/ES_Restful_API(DSL)基础.md)
 
-### 10.3、[ElasticSearch高级](ES/ES Restful API (DSL) 高级.md)
+### 10.3、[ElasticSearch高级](ES/ES_Restful_API(DSL)高级.md)
