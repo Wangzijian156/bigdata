@@ -10,18 +10,20 @@
   - [五、索引别名](#五索引别名)
     - [5.1、什么是索引别名](#51什么是索引别名)
     - [5.2、创建索引别名](#52创建索引别名)
-    - [5.3、 查询别名](#53-查询别名)
+    - [5.3、查询别名](#53查询别名)
     - [5.4、删除某个索引的别名](#54删除某个索引的别名)
     - [5.5、为某个别名进行无缝切换](#55为某个别名进行无缝切换)
     - [5.6、查询别名列表](#56查询别名列表)
   - [六、索引模板](#六索引模板)
   - [七、Shard的划分](#七shard的划分)
     - [7.1、shard太多带来的危害](#71shard太多带来的危害)
-    - [7.2、 如何规划shard数量](#72-如何规划shard数量)
+    - [7.2、如何规划shard数量](#72如何规划shard数量)
     - [7.3、对Segment(段)的优化](#73对segment段的优化)
   - [八、 Java访问ES](#八-java访问es)
     - [8.1、关于ES 的java 客户端的选择](#81关于es-的java-客户端的选择)
     - [8.2、在测试类中测试ES](#82在测试类中测试es)
+    - [8.3、写操作](#83写操作)
+    - [8.4、读操作](#84读操作)
 
 ## 一、SQL
 
@@ -346,7 +348,7 @@ POST  _aliases
 
 
 
-### 5.3、 查询别名 
+### 5.3、查询别名 
 
 查询别名，与使用普通索引没有区别
 
@@ -478,7 +480,7 @@ GET  _template/template_movie*
 
 
 
-### 7.2、 如何规划shard数量
+### 7.2、如何规划shard数量
 
 1）根据每日数据量规划shard数量
 
@@ -573,5 +575,191 @@ GET _cat/indices/?s=segmentsCount:desc&v&h=index,segmentsCount,segmentsMemory,me
     <version>2.4.6</version>
 </dependency>
 
+```
+
+创建 EsClient(ES客户端管理类)
+
+```java
+import java.text.SimpleDateFormat
+import java.util
+import java.util.Date
+
+import io.searchbox.client.{JestClient, JestClientFactory}
+import io.searchbox.client.config.HttpClientConfig
+import io.searchbox.core.{Index, Search, SearchResult}
+import org.elasticsearch.index.query.{BoolQueryBuilder, MatchQueryBuilder, RangeQueryBuilder}
+import org.elasticsearch.search.builder.SearchSourceBuilder
+import org.elasticsearch.search.highlight.HighlightBuilder
+import org.elasticsearch.search.sort.SortOrder
+
+import scala.collection.mutable.ListBuffer
+
+object EsClient {
+
+  private var factory: JestClientFactory = null;
+
+  def getClient: JestClient = {
+    if (factory == null) build();
+    factory.getObject
+
+  }
+
+  /**
+   * 构建ES连接池以及配置
+   */
+  def build(): Unit = {
+    factory = new JestClientFactory
+    factory.setHttpClientConfig(new HttpClientConfig.Builder("http://hadoop102:9200")
+      .multiThreaded(true)          // 是否需要多线程
+      .maxTotalConnection(20)   	// 线程池中的线程数
+      .connTimeout(10000)           // 连接超时时间
+      .readTimeout(1000)            // 读超时时间
+      .build())
+  }
+
+}
+```
+
+### 8.3、写操作
+
+```json
+put /movie_index/movie/4
+{
+  "id":"1001",
+  "name":"复仇者联盟4",
+  "doubanScore":9.0,
+  "actorList":[  
+		{"id":"1","name":"小罗伯特·唐尼"},
+		{"id":"2","name":"克里斯·埃文斯"},
+		{"id":"3","name":"马克·鲁法洛"}
+	] 
+}
+```
+
+Scala代码
+
+```scala
+object Test {
+  def main(args: Array[String]): Unit = {
+    val jestClient = EsClient.getClient
+
+    import java.util
+    val list = new util.ArrayList[Actor]
+    list.add(Actor(1L, "小罗伯特·唐尼"))
+    list.add(Actor(2L, "克里斯·埃文斯"))
+    list.add(Actor(3L, "马克·鲁法洛"))
+
+    // 配置索引数据
+    val index = new Index.Builder(Movie(100L, "复仇者联盟4", 8.5f, list))
+      .index("movie_index")
+      .`type`("movie")
+      .id("4")
+      .build();
+
+    // 写操作
+    jestClient.execute(index)
+    jestClient.close()
+  }
+
+  case class Movie(id: Long, name: String, doubanScore: Double, actionNameList: java.util.List[Actor]) {}
+
+  case class Actor(id: Long, name: String)
+
+}
+```
+
+### 8.4、读操作
+
+```json
+GET movie_index/movie/_search
+{
+  "query":{
+    "match": {"name":"复仇"}
+  }
+}
+```
+
+1）：将"query"整个转换成字符串
+
+```scala
+object Test2 {
+  def main(args: Array[String]): Unit = {
+    val jestClient = EsClient.getClient
+    var query = "{\n  \"query\":{\n    \"match\": {\"name\":\"复仇\"}\n  }\n}"
+    val search: Search = new Search.Builder(query).addIndex("movie_index").addType("movie").build()
+    val result: SearchResult = jestClient.execute(search)
+    import java.util
+    // getHits获取命中结果，注意Map要使用java中的Map
+    val resultList: util.List[SearchResult#Hit[util.Map[String, Object], Void]] = result.getHits(classOf[util.Map[String, Object]])
+    import collection.JavaConversions._
+    for (hit <- resultList) {
+      val source: util.Map[String, Object] = hit.source
+      println(source)
+    }
+    jestClient.close()
+  }
+
+}
+```
+
+输出结果：
+
+```txt
+{id=100.0, name=复仇者联盟4, doubanScore=8.5, actionNameList=[{id=1.0, name=小罗伯特·唐尼}, {id=2.0, name=克里斯·埃文斯}, {id=3.0, name=马克·鲁法洛}], es_metadata_id=4}
+```
+
+2）使用工具构建query
+
+```scala
+object Test2 {
+  def main(args: Array[String]): Unit = {
+    val jestClient = EsClient.getClient
+    // var query = "{\n  \"query\":{\n    \"match\": {\"name\":\"复仇\"}\n  }\n}"
+    val searchSourceBuilder = new SearchSourceBuilder
+    searchSourceBuilder.query(new MatchQueryBuilder("name", "复仇"))
+    searchSourceBuilder.sort("doubanScore", SortOrder.ASC)
+    searchSourceBuilder.from(0)
+    searchSourceBuilder.size(20)
+    val query2: String = searchSourceBuilder.toString
+    val search: Search = new Search.Builder(query2).addIndex("movie_index").addType("movie").build()
+    val result: SearchResult = jestClient.execute(search)
+    import java.util
+    // getHits获取命中结果，注意Map要使用java中的Map
+    val resultList: util.List[SearchResult#Hit[util.Map[String, Object], Void]] = result.getHits(classOf[util.Map[String, Object]])
+    import collection.JavaConversions._
+    for (hit <- resultList) {
+      val source: util.Map[String, Object] = hit.source
+      println(source)
+    }
+    jestClient.close()
+  }
+
+}
+```
+
+3）批次写入
+
+```scala
+//批次化操作  batch   Bulk
+def bulkSave(list: List[(Any, String)], indexName: String): Unit = {
+    if (list != null && list.size > 0) {
+        val jestClient: JestClient = getJestClient()
+        val bulkBuilder = new Bulk.Builder
+        // 每次写入的index和type都一样，可以提出来作为一个默认值
+        bulkBuilder.defaultIndex(indexName).defaultType("_doc")
+        for ((doc, id) <- list) {
+             //如果给id指定id 幂等性（保证精确一次消费的必要条件） 
+            //不指定id 随机生成 非幂
+            val index = new Index.Builder(doc).id(id).build()等性
+            bulkBuilder.addAction(index)
+        }
+        val bulk: Bulk = bulkBuilder.build()
+        val items: util.List[BulkResult#BulkResultItem] = jestClient.execute(bulk).getItems
+        println("已保存" + items.size())
+
+        jestClient.close()
+    }
+
+}
 ```
 
