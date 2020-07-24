@@ -19,8 +19,8 @@
     - [7.1、shard太多带来的危害](#71shard太多带来的危害)
     - [7.2、如何规划shard数量](#72如何规划shard数量)
     - [7.3、对Segment(段)的优化](#73对segment段的优化)
-  - [八、 Java访问ES](#八-java访问es)
-    - [8.1、关于ES 的java 客户端的选择](#81关于es-的java-客户端的选择)
+  - [八、 ES客户端](#八-es客户端)
+    - [8.1、关于ES 客户端的选择](#81关于es-客户端的选择)
     - [8.2、在测试类中测试ES](#82在测试类中测试es)
     - [8.3、写操作](#83写操作)
     - [8.4、读操作](#84读操作)
@@ -533,9 +533,9 @@ GET _cat/indices/?s=segmentsCount:desc&v&h=index,segmentsCount,segmentsMemory,me
 
  
 
-##  八、 Java访问ES
+##  八、 ES客户端
 
-### 8.1、关于ES 的java 客户端的选择
+### 8.1、关于ES 客户端的选择
 
 目前市面上有两类客户端
 
