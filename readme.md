@@ -26,6 +26,12 @@
 
 ## 第八章、HBase知识点总结
 
+### 8.1、[HBase安装](HBase/HBase安装.md)
+
+### 8.2、[HBase基本操作](HBase/HBase基本操作.md)
+
+### 8.3、[HBase架构解析](HBase/HBase架构解析.md)
+
 ## 第九章、Redis知识点总结
 
 ### 9.1、[NoSQL简介](Redis/NoSQL.md)
