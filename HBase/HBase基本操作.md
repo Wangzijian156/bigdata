@@ -1,6 +1,6 @@
-# HBase Shell与API
+# HBase 基本操作
 
-- [HBase Shell与API](#hbase-shell与api)
+- [HBase 基本操作](#hbase-基本操作)
   - [一、HBase基本Shell操作](#一hbase基本shell操作)
     - [1.1、客户端命令](#11客户端命令)
     - [1.2、表的操作](#12表的操作)

@@ -1,6 +1,6 @@
-# HBase
+# HBase结构解析
 
-- [HBase](#hbase)
+- [HBase结构解析](#hbase结构解析)
 	- [一、概述](#一概述)
 		- [1.1、什么是HBase](#11什么是hbase)
 		- [1.2、HBase逻辑结构](#12hbase逻辑结构)

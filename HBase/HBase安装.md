@@ -1,8 +1,11 @@
-## 一、HBase安装
+# HBase安装
 
-- [一、HBase安装](#一hbase安装)
-- [二、HBase服务的启动](#二hbase服务的启动)
-- [三、高可用](#三高可用)
+- [HBase安装](#hbase安装)
+  - [一、HBase安装](#一hbase安装)
+  - [二、HBase服务的启动](#二hbase服务的启动)
+  - [三、高可用](#三高可用)
+
+## 一、HBase安装
 
 1）Zookeeper正常部署
 
