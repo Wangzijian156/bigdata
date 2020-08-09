@@ -365,7 +365,7 @@ vim  /opt/module/elasticsearch6.6.0/logs/my-es.log
 2）修改配置
 
 ```shell
-vim /opt/module/kibana-6.6.0-linux-x86_64config/kibana.yml
+vim /opt/module/kibana-6.6.0-linux-x86_64/config/kibana.yml
 ```
 
 3）修改server.host
