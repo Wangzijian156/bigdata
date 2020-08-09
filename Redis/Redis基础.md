@@ -83,9 +83,20 @@ Redis是用C语言开发的，遵循BSD协议，是一个高性能的（Key/Valu
 
 3）解压完成进入目录cd /opt/module/redis-3.2.5
 
-4）在redis-3.2.5目录下执行make（需安装gcc），继续执行make install
+4）如果出现 "gcc：命令未找到"
 
-5）查看安装目录/usr/local/bin
+```txt
+sudo yum install gcc-c++
+```
+
+5）在redis-3.2.5目录下执行make（需安装gcc），继续执行make install
+
+```txt
+Jemalloc/jemalloc.h：没有那个文件
+- 解决方案：运行make distclean之后再 make
+```
+
+6）查看安装目录/usr/local/bin
 
 ```txt
 - Redis-benchmark: 性能测试工具
@@ -95,17 +106,17 @@ Redis是用C语言开发的，遵循BSD协议，是一个高性能的（Key/Valu
 - Redis-cli：客户端，操作入口
 ```
 
-6）备份redis.conf：拷贝一份redis.conf到其他目录
+7）备份redis.conf：拷贝一份redis.conf到其他目录
 
-7）修改redis.conf文件将里面daemonize no 改成 yes，让服务在后台启动
+8）修改redis.conf文件将里面daemonize no 改成 yes，让服务在后台启动
 
-8）启动命令：执行redis-server /myredis/redis.conf
+9）启动命令：执行redis-server /myredis/redis.conf
 
-9）用客户端访问：redis-cli
+10）用客户端访问：redis-cli
 
 ![image-20200714222523582](https://gitee.com/wangzj6666666/bigdata-img/raw/master/redis//image-20200714222523582.png)
 
-10）ping
+11）ping
 
 ![image-20200714222545754](https://gitee.com/wangzj6666666/bigdata-img/raw/master/redis//image-20200714222545754.png)
 
