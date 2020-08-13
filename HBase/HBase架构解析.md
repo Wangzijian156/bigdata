@@ -347,7 +347,7 @@ HBase中存放着海量的数据，如果从HDFS一个一个读取HFile，太慢
 
 Ok，我们现在再存一个值 “Java”，如果哈希函数返回 3、5、8 的话，图继续变为：
 
-![image-20200805195629875](E:\Hadoop生态\大数据总结\HBase\HBase.assets\image-20200805195629875.png)
+![image-20200805195629875](https://gitee.com/wangzj6666666/bigdata-img/raw/master/hbase/image-20200805195629875.png)
 
 值得注意的是，4 这个 bit 位由于两个值的哈希函数都返回了这个 bit 位，因此它被覆盖了。所以这就造成了布隆过滤器的特殊性：
 
