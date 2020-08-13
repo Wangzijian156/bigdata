@@ -42,6 +42,10 @@
 
 ### 3.2、离线数仓环境搭建
 
+#### [离线数仓：环境搭建（一）](DataWarehouse-Offline/离线数仓：环境搭建-1.md)
+
+#### [离线数仓：环境搭建（二）](DataWarehouse-Offline/离线数仓：环境搭建-2.md)
+
 ### 3.3、离线数仓
 
 
@@ -65,6 +69,8 @@
 #### [ElasticSearch高级](ES/ES_Restful_API(DSL)高级.md)
 
 ### 4.3、ClickHouse
+
+### [ClickHouse总结](ClickHouse/ClickHouse.md)
 
 ### 4.4、Canal & Maxwell
 
