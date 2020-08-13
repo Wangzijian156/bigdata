@@ -210,7 +210,7 @@ nc -lk 7777
 
 "hello"一直都是3号线程处理，"hbase"一直都是4号线程处理，因为keyBy，数据进行了重分区，优点类似shuffle
 
-![image-20200806180357751](E:\Hadoop生态\大数据总结\Flink\Flink开发.assets\image-20200806180357751.png)
+![image-20200806180357751](https://gitee.com/wangzj6666666/bigdata-img/raw/master/flink/image-20200806180357751.png)
 
 如何确定是由哪个sum来统计，其实是对key进行hash再对并行度取模
 
@@ -1046,15 +1046,15 @@ window是一种切割无限数据为有限块进行处理的手段。
 
 - 滚动窗口（Tumbling Windows）：时间对齐，窗口长度固定，没有重叠
 
-![image-20200809102637565](E:\Hadoop生态\大数据总结\Flink\Flink开发.assets\image-20200809102637565.png)
+![image-20200809102637565](https://gitee.com/wangzj6666666/bigdata-img/raw/master/flink/image-20200809102637565.png)
 
 - 滑动窗口（Sliding Windows）：时间对齐，窗口长度固定，有重叠
 
-![image-20200809102657902](E:\Hadoop生态\大数据总结\Flink\Flink开发.assets\image-20200809102657902.png)
+![image-20200809102657902](https://gitee.com/wangzj6666666/bigdata-img/raw/master/flink/image-20200809102657902.png)
 
 - 会话窗口（Session Windows）：时间无对齐
 
-![image-20200809102736758](E:\Hadoop生态\大数据总结\Flink\Flink开发.assets\image-20200809102736758.png)
+![image-20200809102736758](https://gitee.com/wangzj6666666/bigdata-img/raw/master/flink/image-20200809102736758.png)
 
 ### 3.3、Window API
 
@@ -1177,7 +1177,7 @@ window是一种切割无限数据为有限块进行处理的手段。
 
 实例：假如地铁上玩游戏，到8:22:45时已同通关到第三关，8:22:45~8:23:20又通关了5关，但是由于地铁进隧道没有信号，数据没有及时传送到服务器上，该游戏没通关三层会又奖励，最终服务器应该如何计算奖励。
 
-![image-20200809210819955](E:\Hadoop生态\大数据总结\Flink\Flink开发.assets\image-20200809210819955.png)
+![image-20200809210819955](https://gitee.com/wangzj6666666/bigdata-img/raw/master/flink/image-20200809210819955.png)
 
 1）如果按照Processing Time来统计数据那么玩家只通关了三层，奖励一次，但实际上顽疾已经通关到第8层应该奖励2次，这显然不符合逻辑
 
@@ -1215,7 +1215,7 @@ env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime)
 
 Watermark特点：
 
-![image-20200809213711825](E:\Hadoop生态\大数据总结\Flink\Flink开发.assets\image-20200809213711825.png)
+![image-20200809213711825](https://gitee.com/wangzj6666666/bigdata-img/raw/master/flink/image-20200809213711825.png)
 
 ```txt
 - watermark 是一条特殊的数据记录
@@ -1229,7 +1229,7 @@ Watermark特点：
 
 实例：上游有4个并行任务，中间是Task（4个分区），下游有三个并行任务，如下图所示
 
-![image-20200809213553109](E:\Hadoop生态\大数据总结\Flink\Flink开发.assets\image-20200809213553109.png)
+![image-20200809213553109](https://gitee.com/wangzj6666666/bigdata-img/raw/master/flink/image-20200809213553109.png)
 
 1）Task中的每个分区都会存放一个Watermark
 
