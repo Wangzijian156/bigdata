@@ -1,5 +1,10 @@
 # Flink安装
 
+- [Flink安装](#flink安装)
+  - [一、Standalone模式](#一standalone模式)
+  - [二、Yarn模式](#二yarn模式)
+  - [三、配置文件解析](#三配置文件解析)
+
 ## 一、Standalone模式
 
 1）解压缩  flink-1.10.1-bin-scala_2.12.tgz
