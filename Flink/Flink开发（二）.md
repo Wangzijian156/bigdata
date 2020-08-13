@@ -1,1276 +1,798 @@
-# Flink开发（上）
+# Flink开发（中）
 
-## 一、基础操作
+- [Flink开发（中）](#flink开发中)
+  - [五、状态编程和容错机制](#五状态编程和容错机制)
+    - [5.1、什么是状态](#51什么是状态)
+    - [5.2、Flink中的状态](#52flink中的状态)
+      - [5.2.1、算子状态](#521算子状态)
+      - [5.2.2、键控状态](#522键控状态)
+    - [5.3、代码中定义状态](#53代码中定义状态)
+    - [5.4、状态后端](#54状态后端)
+    - [5.5、状态一致性](#55状态一致性)
+      - [5.5.1、一致性检查点](#551一致性检查点)
+      - [5.5.2、检查点算法](#552检查点算法)
+      - [5.5.3、容错机制代码设置](#553容错机制代码设置)
+      - [5.5.4、保存点](#554保存点)
+    - [5.6、端到端 exactly-once](#56端到端-exactly-once)
+      - [5.6.1、幂等写入](#561幂等写入)
+      - [5.6.2、事务写入](#562事务写入)
+      - [5.6.3、预写日志（WAL）](#563预写日志wal)
+      - [5.6.4、两阶段提交（2PC）](#564两阶段提交2pc)
+      - [5.6.5、一致性对比](#565一致性对比)
+      - [5.6.7、Kafka 状态一致性的保证](#567kafka-状态一致性的保证)
+  - [六、ProcessFunction API](#六processfunction-api)
+    - [6.1、概述](#61概述)
+    - [6.2、KeyedProcessFunction](#62keyedprocessfunction)
+    - [6.3、侧输出流](#63侧输出流)
 
-### 1.1、创建项目
 
-1）创建maven工程，pom文件如下
+## 五、状态编程和容错机制
 
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
-    <modelVersion>4.0.0</modelVersion>
-    <groupId>com.atguigu.flink</groupId>
-    <artifactId>FlinkTutorial</artifactId>
-    <version>1.0-SNAPSHOT</version>
+### 5.1、什么是状态
 
-    <dependencies>
-        <dependency>
-            <groupId>org.apache.flink</groupId>
-            <artifactId>flink-scala_2.12</artifactId>
-            <version>1.10.1</version>
-        </dependency>
-        <!-- https://mvnrepository.com/artifact/org.apache.flink/flink-streaming-scala -->
-        <dependency>
-            <groupId>org.apache.flink</groupId>
-            <artifactId>flink-streaming-scala_2.12</artifactId>
-            <version>1.10.1</version>
-        </dependency>
-    </dependencies>
+流式计算分为无状态和有状态两种情况。
 
-<build>
-    <plugins>
-    <!-- 该插件用于将Scala代码编译成class文件 -->
-    <plugin>
-        <groupId>net.alchim31.maven</groupId>
-        <artifactId>scala-maven-plugin</artifactId>
-        <version>3.4.6</version>
-        <executions>
-            <execution>
-                <!-- 声明绑定到maven的compile阶段 -->
-                <goals>
-                    <goal>compile</goal>
-                </goals>
-            </execution>
-        </executions>
-    </plugin>
-        <plugin>
-            <groupId>org.apache.maven.plugins</groupId>
-            <artifactId>maven-assembly-plugin</artifactId>
-            <version>3.0.0</version>
-            <configuration>
-                <descriptorRefs>
-                    <descriptorRef>jar-with-dependencies</descriptorRef>
-                </descriptorRefs>
-            </configuration>
-            <executions>
-                <execution>
-                    <id>make-assembly</id>
-                    <phase>package</phase>
-                    <goals>
-                        <goal>single</goal>
-                    </goals>
-                </execution>
-            </executions>
-        </plugin>
-    </plugins>
-</build>
-</project>
+1）无状态流处理每次只转换一条输入记录，并且仅根据最新的输入记录输出结果
+
+```txt
+例如，流处理应用程序从传感器接收温度读数，并在温度超过90度时发出警告。
 ```
 
-2）添加scala框架 和 scala文件夹
+2）有状态流处理维护所有已处理记录的状态值，并根据每条新输入的记录更新状态，因此输出记录(灰条)反映的是综合考虑多个事件之后的结果
+
+```
+- 计算过去一小时的平均温度。
+- 若在一分钟内收到两个相差20度以上的温度读数，则发出警告。
+```
+
+流与流之间的所有关联操作，以及流与静态表或动态表之间的关联操作，都是有状态的计算。
 
 
 
-### 1.2、Wordcount的实现
+### 5.2、Flink中的状态
 
-#### 1.2.1、批处理
+![image-20200810103109113](https://gitee.com/wangzj6666666/bigdata-img/raw/master/flink/image-20200810103109113.png)
+
+Flink中由一个任务维护，并且用来计算某个结果的所有数据，都属于这个任务的状态。
+
+```txt
+备注：可以认为状态就是一个本地变量，可以被任务的业务逻辑访问，一般会和特定的算子绑定。
+```
+
+Flink有两种类型的状态：算子状态、键控状态。
+
+
+
+#### 5.2.1、算子状态
+
+算子状态（Operator State，例如：map、flatMap）结构图如下：
+
+
+
+![image-20200810103924205](https://gitee.com/wangzj6666666/bigdata-img/raw/master/flink/image-20200810103924205.png)
+
+- 特点
+
+```
+- 算子状态的作用范围限定为算子任务，由同一并行任务所处理的所有数据都可以访问到相同的状态
+- 状态对于同一子任务而言是共享的
+- 算子状态不能由相同或不同算子的另一个子任务访问
+```
+
+- 算子状态数据结构
+
+```txt
+- 列表状态（List state）
+	- 将状态表示为一组数据的列表
+	
+- 联合列表状态（Union list state）
+	- 也将状态表示为数据的列表。它与常规列表状态的区别在于，在发生故障时，或者从保存点（savepoint）启动应用
+	  程序时如何恢复
+	  
+- 广播状态（Broadcast state）
+	- 如果一个算子有多项任务，而它的每项任务状态又都相同，那么这种特殊情况最适合应用广播状态
+```
+
+
+
+#### 5.2.2、键控状态
+
+键控状态（Keyed State，例如keyBy），结构图如下：
+
+![image-20200810104341946](https://gitee.com/wangzj6666666/bigdata-img/raw/master/flink/image-20200810104341946.png)
+
+- 特点
+
+```txt
+- 根据输入数据流中定义的键（key）来维护和访问的
+- Flink 为每个 key 维护一个状态实例，并将具有相同键的所有数据，都分区到同一个算子任务中，这个任务会维护和处
+  理这个 key 对应的状态
+- 当任务处理一条数据时，它会自动将状态的访问范围限定为当前数据的 key
+```
+
+- 键控状态数据结构
+
+```txt
+- 值状态（Value state）
+	- 将状态表示为单个的值
+	
+- 列表状态（List state）
+	- 将状态表示为一组数据的列表
+	
+- 映射状态（Map state）
+	- 将状态表示为一组 Key-Value 对
+	
+- 聚合状态（Reducing state & Aggregating State）
+	- 将状态表示为一个用于聚合操作的列表
+```
+
+```txt
+注意：大多数情况下使用键控状态（Keyed State）
+```
+
+
+
+### 5.3、代码中定义状态
+
+1）声明一个状态有两种方式：必须定义在RichFunction中，因为需要运行时上下文
+
+- 第一种：全局变量
 
 ```scala
-import org.apache.flink.api.scala._
+var valueState: ValueState[Double] = _
+//在这是获取不到上下文的，富函数只有在调用open方法时才会生成下上文
+//val valueState: ValueState[Double] = getRuntimeContext.getState( new ValueStateDescriptor[Double]("valuestate", classOf[Double]))
+ override def open(parameters: Configuration): Unit = {
+    valueState = getRuntimeContext.getState(new ValueStateDescriptor[Double]("valuestate", classOf[Double]))
+  }
+```
 
-object WordCount {
+- 第二种：lazy延迟加载
+
+```scala
+lazy val listState: ListState[Int] = getRuntimeContext
+    .getListState( new ListStateDescriptor[Int]("liststate", classOf[Int]) )
+```
+
+2）各种数据类型的使用（list、map、reduce）
+
+```scala
+class MyRichMapper1 extends RichMapFunction[SensorReading, String] {
+
+  var valueState: ValueState[Double] = _
+  lazy val listState: ListState[Int] = getRuntimeContext
+    .getListState( new ListStateDescriptor[Int]("liststate", classOf[Int]) )
+  lazy val mapState: MapState[String, Double] = getRuntimeContext
+    .getMapState(new MapStateDescriptor[String, Double]("mapstate", classOf[String], classOf[Double]))
+  lazy val reduceState: ReducingState[SensorReading] = getRuntimeContext
+    .getReducingState(new ReducingStateDescriptor[SensorReading]("reducestate", new MyReducer, classOf[SensorReading]))
+
+  override def open(parameters: Configuration): Unit = {
+    valueState = getRuntimeContext.getState(new ValueStateDescriptor[Double]("valuestate", classOf[Double]))
+  }
+
+  override def map(value: SensorReading): String = {
+    val myV = valueState.value()
+    valueState.update(value.temperature)
+    listState.add(1)
+    val list = new util.ArrayList[Int]()
+    list.add(2)
+    list.add(3)
+    listState.addAll(list)
+    listState.update(list)
+    listState.get()
+
+    mapState.contains("sensor_1")
+    mapState.get("sensor_1")
+    mapState.put("sensor_1", 1.3)
+
+    reduceState.get()
+    reduceState.add(value)
+
+    value.id
+  }
+}
+```
+
+2）需求：对于温度传感器温度值跳变，超过10度，报警
+
+- 第一种实现方式：自定义富函数
+
+```scala
+object StateTest {
   def main(args: Array[String]): Unit = {
-    // 创建一个批处理执行环境
-    val env: ExecutionEnvironment = ExecutionEnvironment.getExecutionEnvironment
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setParallelism(1)
+    // 读取数据
+    val inputStream = env.socketTextStream("hadoop102", 7778)
 
-    // 从文件中读取数据
-    val inputPath: String = "input/hello.txt"
-    val inputDataSet = env.readTextFile(inputPath)
+    // 先转换成样例类类型（简单转换操作）
+    val dataStream = inputStream
+      .map( data => {
+        val arr = data.split(",")
+        SensorReading(arr(0), arr(1).toLong, arr(2).toDouble)
+      } )
 
-    val resultDataSet = inputDataSet
-      .flatMap(_.split(" "))
-      .map((_, 1))
-      .groupBy(0) // 以第一个元素作为key进行分组
-      .sum(1) // 对所有数据的第二个元素求和
+    // 需求：对于温度传感器温度值跳变，超过10度，报警
+    val alertStream = dataStream
+      .keyBy(_.id)
+      .flatMap( new TempChangeAlert(10.0) )
+    
+    alertStream.print()
 
-    resultDataSet.print()
+    env.execute("state test")
+  }
+}
 
+// 实现自定义RichFlatmapFunction
+class TempChangeAlert(threshold: Double) extends RichFlatMapFunction[SensorReading, (String, Double, Double)] {
+  // 定义状态保存上一次的温度值
+  lazy val lastTempState: ValueState[Double] = getRuntimeContext.getState(new ValueStateDescriptor[Double]("last-temp", classOf[Double]))
+  // 第一个数据,lastTempState.value()为0，如果第一次的温度超过10度， (value.temperature - lastTemp).abs肯定大于10，会报警
+  // 定义一个标志位，忽略第一次的温度
+  lazy val flagState: ValueState[Boolean] = getRuntimeContext.getState(new ValueStateDescriptor[Boolean]("flag", classOf[Boolean]))
+
+  override def flatMap(value: SensorReading, out: Collector[(String, Double, Double)]): Unit = {
+    // 获取上次的温度值
+    val lastTemp = lastTempState.value()
+    // 跟最新的温度值求差值作比较
+    val diff = (value.temperature - lastTemp).abs
+    if (!flagState.value() && diff > threshold)
+      out.collect((value.id, lastTemp, value.temperature))
+
+    // 更新状态
+    lastTempState.update(value.temperature)
+    flagState.update(true)
   }
 }
 ```
 
-#### 1.2.2、流处理
+- 第一种实现方式：flatMapWithState
 
 ```scala
-import org.apache.flink.api.java.utils.ParameterTool
-import org.apache.flink.api.scala._
-import org.apache.flink.streaming.api.scala.{DataStream, StreamExecutionEnvironment}
-
-object WordCountStream {
-  def main(args: Array[String]): Unit = {
-    // 创建一个批处理执行环境
-    val env: StreamExecutionEnvironment = StreamExecutionEnvironment.getExecutionEnvironment
-    // 从外部命令中获取参数
-    val params: ParameterTool =  ParameterTool.fromArgs(args)
-    val host: String = params.get("host")
-    val port: Int = params.getInt("port")
-
-    // 接收一个socket文本流
-    // nc -lk 7777
-    val inputStream: DataStream[String] = env.socketTextStream(host, port)
-
-    val resultStream: DataStream[(String, Int)] = inputStream
-      .flatMap(_.split("\\s"))
-      .filter(_.nonEmpty)
-      .map((_, 1)) 
-      .keyBy(0)
-      .sum(1)
-    resultStream.print()
-
-    // 启动任务执行
-    env.execute()
-  }
-}
-```
-
-注意：这里使用ParameterTool来获取main方法的参数，查看fromArgs源码
-
-```scala
-else if (args[i].startsWith("--") || args[i].startsWith("-")) {
-    // the argument cannot be a negative number because we checked earlier
-    // -> the next argument is a parameter name
-    map.put(key, NO_VALUE_KEY);
-} 
-```
-
-默认获取"--" 或"-"开头的参数，设置main方法的启动配置Program arguments
-
-```txt
---host hadoop102 --port 7777
-```
-
-最后在hadoop102上启动netcat
-
-```shell
-nc -lk 7777
-```
-
-传一下数据观察下规律的，如下图：
-
-![image-20200806175137328](https://gitee.com/wangzj6666666/bigdata-img/raw/master/flink/image-20200806175137328.png)
-
-"hello"一直都是3号线程处理，"hbase"一直都是4号线程处理，因为keyBy，数据进行了重分区，优点类似shuffle
-
-![image-20200806180357751]https://gitee.com/wangzj6666666/bigdata-img/raw/master/flink/image-20200806180357751.png)
-
-如何确定是由哪个sum来统计，其实是对key进行hash再对并行度取模
-
-```txt
-"hello".hashCode() % 8
-```
-
-
-
-#### 1.2.3、设置并行度
-
-并行度就是接受数据时用几个线程来处理
-
-1）并行度设置
-
-- 全局设置
-
-
-```scala
- // 创建一个批处理执行环境
- val env: StreamExecutionEnvironment = StreamExecutionEnvironment.getExecutionEnvironment
- // 设置并行度（不设置并行度，默认使用cpu的核数）
- env.setParallelism(2)
-```
-
-- 单个算子指定由某一个并行度执行（默认为1）
-
-```scala
-map((_, 1)).setParallelism(2) // 指定某个并行度执行
-```
-
-- 给print指定由某一个并行度执行
-
-
-```scala
-resultStream.print().setParallelism(1)
-```
-
-假如最后的结果要写入文件中，如果不指定并行度，多线程写文件会出错
-
-- 提交job时，在网站上指定
-
-
-2）并行度优先级：算子指定 > 全局设置 > 网站上指定 > 配置文件默认值
-
-
-
-### 1.3、提交job
-
-
-
-![image-20200806203125210](https://gitee.com/wangzj6666666/bigdata-img/raw/master/flink/image-20200806203125210.png)
-
-
-
-
-
-## 二、DataSream API
-
-### 2.1、Environment
-
-![image-20200808092653140](https://gitee.com/wangzj6666666/bigdata-img/raw/master/flink/image-20200808092653140.png)
-
- 1）批处理执行环境
-
-```scala
-val env = ExecutionEnvironment.getExecutionEnvironment
-```
-
-2）流处理执行环境
-
-```scala
-val env = StreamExecutionEnvironment.getExecutionEnvironment
-```
-
-3）返回本地执行环境，需要在调用时指定默认的并行度
-
-```scala
-val env = StreamExecutionEnvironment.createLocalEnvironment(1)
-```
-
-4）返回集群执行环境，将Jar提交到远程服务器。需要在调用时指定JobManager的IP和端口号，并指定要在集群中运行的Jar包
-
-```scala
-val env = ExecutionEnvironment.createRemoteEnvironment("jobmanage-hostname", 6123,"YOURPATH//wordcount.jar")
-```
-
-
-
-### 2.2、Source
-
-定义样例类
-
-```scala
-// 定义样例类，温度传感器
-case class SensorReading( id: String, timestamp: Long, temperature: Double )
-```
-
-1）从集合中读取数据
-
-```scala
- // 创建执行环境
- val env = StreamExecutionEnvironment.getExecutionEnvironment
- // 1、从集合中读取数据
- val dataList = List(
-     SensorReading("sensor_1", 1547718199, 35.8),
-     SensorReading("sensor_6", 1547718201, 15.4),
-     SensorReading("sensor_7", 1547718202, 6.7),
-     SensorReading("sensor_10", 1547718205, 38.1)
- )
- val stream = env.fromCollection(dataList)
- stream.print()
-```
-
-2）从文件读取数据
-
-```scala
-// 2、从文件中读取数据
-val inputPath = "input/hello.txt"
-val stream2 = env.readTextFile(inputPath)
-stream2.print()
-```
-
-3）从kafka中读取数据
-
-- 需要引入kafka连接器的依赖，pom.xml
-
-```xml
-<dependency>
-    <groupId>org.apache.flink</groupId>
-    <artifactId>flink-connector-kafka-0.11_2.12</artifactId>
-    <version>1.10.1</version>
-</dependency>
-```
-
-- 具体代码如下
-
-```scala
-// 3、从kafka中读取数据
-val properties = new Properties()
-properties.setProperty("bootstrap.servers", "hadoop102:9092")
-properties.setProperty("group.id", "consumer-group")
-properties.setProperty("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
-properties.setProperty("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
-properties.setProperty("auto.offset.reset", "latest")
-
-// bin/kafka-console-producer.sh --broker-list hadoop102:9092 --topic sensor
-val stream3 = env.addSource(new FlinkKafkaConsumer011[String]("sensor", new SimpleStringSchema(), properties))
-stream3.print()
-```
-
-
-
-4）自定义Source
-
-除了以上的source数据来源，我们还可以自定义source。需要做的，只是传入一个SourceFunction就可以。具体调用如下
-
-- 自定义SourceFunction
-
-```scala
-// 自定义SourceFunction
-class MySensorSource() extends SourceFunction[SensorReading]{
-  // 定义一个标识位flag，用来表示数据源是否正常运行发出数据
-  var running: Boolean = true
-
-  override def cancel(): Unit = running = false
-
-  override def run(ctx: SourceFunction.SourceContext[SensorReading]): Unit = {
-    // 定义一个随机数发生器
-    val rand = new Random()
-    // 随机生成一组（10个）传感器的初始温度: （id，temp）
-    var curTemp = 1.to(10).map( i => ("sensor_" + i, rand.nextDouble() * 100) )
-    // 定义无限循环，不停地产生数据，除非被cancel
-    while(running){
-      // 在上次数据基础上微调，更新温度值
-      curTemp = curTemp.map(
-        data => (data._1, data._2 + rand.nextGaussian())
-      )
-      // 获取当前时间戳，加入到数据中，调用ctx.collect发出数据
-      val curTime = System.currentTimeMillis()
-      curTemp.foreach(
-        data => ctx.collect(SensorReading(data._1, curTime, data._2))
-      )
-      // 间隔500ms
-      Thread.sleep(500)
-    }
-  }
-}
-```
-
-- 调用SourceFunction
-
-```scala
- // 4. 自定义Source
-val stream4 = env.addSource( new MySensorSource() )
-stream4.print()
-env.execute()
-```
-
-
-
-### 2.3、Transform
-
-#### 2.3.1、map、flatMap、filter
-
-用法与spark中一致
-
-#### 2.3.2、KeyBy
-
-```txt
-DataStream => KeyedStream
-```
-
-![image-20200808094719534](https://gitee.com/wangzj6666666/bigdata-img/raw/master/flink/image-20200808094719534.png)
-
-对key取hash再对分区取模 => 相同的key在同一个分区上，一个分区可以包含多个key
-
-
-
-#### 2.3.3、滚动聚合算子
-
-滚动聚合算子（Rolling Aggregation），这些算子可以针对KeyedStream的每一个支流做聚合。
-
-```txt
-sum()
-min()
-max()
-minBy()
-maxBy()
-```
-
-实例：创建sensor.txt，找出最低温度
-
-```txt
-sensor_1,1547718199,35.8
-sensor_6,1547718201,15.4
-sensor_7,1547718202,6.7
-sensor_10,1547718205,38.1
-sensor_1,1547718206,32
-sensor_1,1547718208,36.2
-sensor_1,1547718210,29.7
-sensor_1,1547718213,30.9
-```
-
-代码
-
-```scala
- val inputStream = env.readTextFile("input/sensor.txt")
-// 1、先转换成样例类类型（简单转换操作）
-val dataStream = inputStream.map(data => {
-    val strs = data.split(",")
-    SensorReading(strs(0), strs(1).toLong, strs(2).toDouble)
-})
-
-// dataStream -> keyStream
-// 2、聚合
-val aggStream = dataStream.keyBy(_.id).minBy("temperature")
-// min：只会找出temperature最小值（id、timestamp首次加载后不在变动）
-// minBy：会找出temperature最小值，及其对应的id、timestamp整条数据
-aggStream.print()
-```
-
-
-
-#### 2.3.4、Reduce
-
-**KeyedStream** **→** **DataStream**： 分组之后的聚合。
-
-实例：复杂需求，查询到现在为止，出现过的最低温度（tempstamp要不断刷新，temperature取最小值）
-
-1）lamda表达式
-
-2）自定义ReduceFunction
-
-```scala
-class MyReduceFunction extends ReduceFunction[SensorReading] {
-  override def reduce(value1: SensorReading, value2: SensorReading): SensorReading =
-    SensorReading(value1.id, value2.timestamp, value1.temperature.min(value2.temperature))
-}
-```
-
-```scala
-val resultStream = dataStream
-      .keyBy("id")
-	  // 方法一：lamda表达式
-      //      .reduce( (curState, newData) =>
-      //        SensorReading( curState.id, newData.timestamp, curState.temperature.min(newData.temperature) )
-      //      )
-      .reduce(new MyReduceFunction)
-// min max reduce这些聚合函数都在keyStream中
-resultStream.print()
-```
-
-
-
-#### 2.3.5、Split 和 Select
-
-1）Split（分流）：
-
-```txt
-DataStream => SplitStream：根据某些特征把一个DataStream拆分成两个或者多个DataStream。
-```
-
-![image-20200808095918347](https://gitee.com/wangzj6666666/bigdata-img/raw/master/flink/image-20200808095918347.png)
-
-2）select
-
-```txt
-SplitStream→DataStream：从一个SplitStream中获取一个或者多个DataStream。
-```
-
-![image-20200808095939867](https://gitee.com/wangzj6666666/bigdata-img/raw/master/flink/image-20200808095939867.png)
-
-实例：（需求）传感器数据按照温度高低（以30度为界），拆分成两个流。
-
-```scala
-val splitStream = stream2
-  .split( sensorData => {
-    if (sensorData.temperature > 30) Seq("high") else Seq("low")
-  } )
-
-val high = splitStream.select("high")
-val low = splitStream.select("low")
-val all = splitStream.select("high", "low")
-```
-
-
-
-#### 2.3.6、Connect和 CoMap
-
-1）connect（合流）
-
-```scala
-DataStream,DataStream => ConnectedStreams：连接两个保持他们类型的数据流，两个数据流被Connect之后，只是被放在了一个同一个流中，内部依然保持各自的数据和形式不发生任何变化，两个流相互独立。
-```
-
-![image-20200808100552991](https://gitee.com/wangzj6666666/bigdata-img/raw/master/flink/image-20200808100552991.png)
-
-2）CoMap,CoFlatMap
-
-```scala
-ConnectedStreams → DataStream：作用于ConnectedStreams上，功能与map和flatMap一样，对ConnectedStreams中的每一个Stream分别进行map和flatMap处理。
-```
-
-![image-20200808100636443](https://gitee.com/wangzj6666666/bigdata-img/raw/master/flink/image-20200808100636443.png)
-
-```scala
-// 4.2 合流，connect
-val warningStream = highTempStream.map(data => (data.id, data.temperature))
-val connectedStreams = warningStream.connect(lowTempStream)
-
-// 用coMap对数据进行分别处理
-val coMapResultStream: DataStream[Any] = connectedStreams
-.map(
-    waringData => (waringData._1, waringData._2, "warning"),
-    lowTempData => (lowTempData.id, "healthy")
-)
-coMapResultStream.print("coMap")
-```
-
-输出结果：
-
-```txt
-coMap:7> (sensor_1,30.9,warning)
-coMap:11> (sensor_6,healthy)
-coMap:13> (sensor_7,healthy)
-coMap:1> (sensor_1,32.0,warning)
-coMap:15> (sensor_10,38.1,warning)
-coMap:10> (sensor_1,35.8,warning)
-coMap:5> (sensor_1,healthy)
-coMap:3> (sensor_1,36.2,warning)
-```
-
-3）合流在实际开发中有哪些运用场景
-
-```txt
-火情的检测，只检测温度不合理，高温不一定着火，冒烟了才算着火
-高温 + 烟雾指数 => 合流
-```
-
-
-
-#### 2.3.7、Union
-
-```txt
-DataStream => DataStream：对两个或者两个以上的DataStream进行union操作，产生一个包含所有DataStream元素的新DataStream。
- 	- 注意： union合流,数据类型必须一样
-```
-
-![image-20200808101317580](https://gitee.com/wangzj6666666/bigdata-img/raw/master/flink/image-20200808101317580.png)
-
-```scala
-val unionStream = highTempStream.union(lowTempStream, allTempStream)
-```
-
-
-
-### 2.4、基础数据类型
-
-1）Flink支持所有的Java和Scala基础数据类型，Int, Double, Long, String, …
-
-2）Java和Scala元组（Tuples）
-
-```txt
-flink用java语言实现了元组功能
-```
-
-3）Scala样例类（case classes）
-
-```scala
-case class Person(name: String, age: Int) 
-val persons: DataStream[Person] = env.fromElements(
-Person("Adam", 17), 
-Person("Sarah", 23) )
-persons.filter(p => p.age > 18)
-```
-
-4）Java简单对象（POJOs）
-
-```java
-public class Person {
-public String name;
-public int age;
-  public Person() {}
-  public Person(String name, int age) { 
-    this.name = name;      
-    this.age = age;  
-  }
-}
-DataStream<Person> persons = env.fromElements(   
-new Person("Alex", 42),   
-new Person("Wendy", 23));
-```
-
-5）其它（Arrays, Lists, Maps, Enums, 等等）
-
-```txt
-Flink对Java和Scala中的一些特殊目的的类型也都是支持的，比如Java的ArrayList，HashMap，Enum等等。
-```
-
-
-
-### 2.5、实现UDF函数
-
-实现UDF函数（更细粒度的控制流）
-
-#### 2.5.1、函数类
-
-函数类（Function Classes）Flink暴露了所有udf函数的接口(实现方式为接口或者抽象类)。例如MapFunction, FilterFunction, ProcessFunction等等
-
-1）FilterFunction接口
-
-```scala
-class FilterFilter extends FilterFunction[String] {
-      override def filter(value: String): Boolean = {
-        value.contains("flink")
-      }
-}
-val flinkTweets = tweets.filter(new FlinkFilter)
-```
-
-2）我们filter的字符串"flink"还可以当作参数传进去
-
-```scala
-val tweets: DataStream[String] = ...
-val flinkTweets = tweets.filter(new KeywordFilter("flink"))
-
-class KeywordFilter(keyWord: String) extends FilterFunction[String] {
-    override def filter(value: String): Boolean = {
-    	value.contains(keyWord)
-    }
-}
-```
-
-3）匿名类
-
-```scala
-val flinkTweets = tweets.filter(
-    new RichFilterFunction[String] {
-        override def filter(value: String): Boolean = {
-        	value.contains("flink")
+def main(args: Array[String]): Unit = {
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setParallelism(1)
+    // 读取数据
+    val inputStream = env.socketTextStream("hadoop102", 7778)
+
+    // 先转换成样例类类型（简单转换操作）
+    val dataStream = inputStream
+    .map( data => {
+        val arr = data.split(",")
+        SensorReading(arr(0), arr(1).toLong, arr(2).toDouble)
+    } )
+
+    // 需求：对于温度传感器温度值跳变，超过10度，报警
+    val alertStream = dataStream
+    .keyBy(_.id)
+    //      .flatMap( new TempChangeAlert(10.0) )
+    .flatMapWithState[(String, Double, Double), Double] {
+        case (data: SensorReading, None) => ( List.empty, Some(data.temperature) )
+        case (data: SensorReading, lastTemp: Some[Double]) => {
+            // 跟最新的温度值求差值作比较
+            val diff = (data.temperature - lastTemp.get).abs
+            if( diff > 10.0 )
+            ( List((data.id, lastTemp.get, data.temperature)), Some(data.temperature) )
+            else
+            ( List.empty, Some(data.temperature) )
         }
     }
-)
-```
 
-#### 2.5.2、匿名函数
+    alertStream.print()
 
-匿名函数（Lambda Functions）
-
-```scala
-val tweets: DataStream[String] = ...
-val flinkTweets = tweets.filter(_.contains("flink"))
-```
-
-#### 2.5.3、富函数
-
-富函数（Rich Function）是DataStream API提供的一个函数类的接口，所有Flink函数类都有其Rich版本。它与常规函数的不同在于，可以获取运行环境的上下文，并拥有一些生命周期方法，所以可以实现更复杂的功能。
-
-Rich Function有一个生命周期的概念。典型的生命周期方法有：
-
-```txt
-- open()方法是rich function的初始化方法，当一个算子例如map或者filter被调用之前open()会被调用。
-- close()方法是生命周期中的最后一个调用的方法，做一些清理工作。
-- getRuntimeContext()方法提供了函数的RuntimeContext的一些信息，例如函数执行的并行度，任务的名字，以及state状态
-```
-
-实例：
-
-```scala
-// 富函数，可以获取到运行时上下文，还有一些生命周期
-class MyRichMapper extends RichMapFunction[SensorReading, String]{
-
-  // 在构造函数执行完成后，数据加载之前执行
-  override def open(parameters: Configuration): Unit = {
-    // 做一些初始化操作，比如数据库的连接
-    //    getRuntimeContext
-  }
-
-  override def map(value: SensorReading): String = value.id + " temperature"
-
-  override def close(): Unit = {
-    //  一般做收尾工作，比如关闭连接，或者清空状态
-  }
+    env.execute("state test")
 }
 ```
 
 
 
-### 2.6、Sink
 
-Flink没有类似于spark中foreach方法，让用户进行迭代的操作。所有对外的输出操作都要利用Sink完成。
 
-```scala
- stream.addSink(new MySink(xxxx)) 
+### 5.4、状态后端
+
+每传入一条数据，有状态的算子任务都会读取和更新状态。由于有效的状态访问对于处理数据的低延迟至关重要，因此每个并行任务都会在本地维护其状态，以确保快速的状态访问。
+
+1）定义：状态的存储、访问以及维护，由一个可插入的组件决定，这个组件就叫做**状态后端**（state backend）。
+
+状态后端主要负责两件事：
+
+```txt
+- 本地的状态管理；
+- 以及将检查点（checkpoint）状态写入远程存储
 ```
 
-#### 2.6.1、File Sink
+2）状态后端类型
+
+- MemoryStateBackend（开发环境）内存级的状态后端
+
+```txt
+本地状态存储在TaskManager的JVM堆上；而将checkpoint存储在JobManager的内存中。
+	- 特点：快速、低延迟，但不稳定
+```
+
+- FsStateBackend（稳定）
+
+```txt
+将checkpoint存到远程的持久化文件系统（FileSystem）上，本地状态存储在TaskManager的JVM堆上。
+	- 同时拥有内存级的本地访问速度，和更好的容错保证
+```
+
+- RocksDBStateBackend
+
+```txt
+将所有状态序列化后，存入本地的RocksDB中存储。
+```
+
+3）代码
 
 ```scala
 val env = StreamExecutionEnvironment.getExecutionEnvironment
-env.setParallelism(1)
-// 读取数据
-val inputPath = "D:\\Projects\\BigData\\FlinkTutorial\\src\\main\\resources\\sensor.txt"
-val inputStream = env.readTextFile(inputPath)
-
-// 先转换成样例类类型（简单转换操作）
-val dataStream = inputStream
-.map( data => {
-    val arr = data.split(",")
-    SensorReading(arr(0), arr(1).toLong, arr(2).toDouble)
-} )
-
-dataStream.print()
-//    dataStream.writeAsCsv("D:\\Projects\\BigData\\FlinkTutorial\\src\\main\\resources\\out.txt")
-dataStream.addSink(
-    StreamingFileSink.forRowFormat(
-        new Path("D:\\Projects\\BigData\\\\FlinkTutorial\\src\\main\\resources\\out1.txt"),
-        new SimpleStringEncoder[SensorReading]()
-    ).build()
-)
-
-env.execute("file sink test")
+env.setStateBackend(new FsStateBackend(""))
+// setStateBackend已弃用，以后用StreamExecutionEnvironment.setStateBackend(StateBackend)
 ```
 
 
 
-#### 2.6.2、Kafka Sink
-
-1）pom.xml添加flink-connector-kafka依赖
-
-```xml
-<dependency>
-    <groupId>org.apache.flink</groupId>
-    <artifactId>flink-connector-kafka-0.11_2.12</artifactId>
-    <version>1.10.1</version>
-</dependency>
-```
-
-2）代码：从sensor中读取数据，再将数据写入到sinktest中
-
-```scala
-val env = StreamExecutionEnvironment.getExecutionEnvironment
-env.setParallelism(1)
-// 从kafka读取数据
-val properties = new Properties()
-properties.setProperty("bootstrap.servers", "hadoop102:9092")
-properties.setProperty("group.id", "consumer-group")
-val stream = env.addSource( new FlinkKafkaConsumer011[String]("sensor", new SimpleStringSchema(), properties) )
 
 
-// 先转换成样例类类型（简单转换操作）
-val dataStream = stream
-.map( data => {
-    val arr = data.split(",")
-    SensorReading(arr(0), arr(1).toLong, arr(2).toDouble).toString
-} )
+### 5.5、状态一致性
 
-dataStream.addSink( new FlinkKafkaProducer011[String]("hadoop102:9092", "sinktest", new SimpleStringSchema()) )
-env.execute("kafka sink test")
-```
-
-- sensor生成数据
-
-```shell
-bin/kafka-console-producer.sh --broker-list hadoop102:9092 --topic sensor
-```
-
-- 消费sensortest
-
-```shell
-/opt/module/kafka/bin/kafka-console-consumer.sh --bootstrap-server hadoop102:9092 --from-beginning --topic sensortest
-```
-
-
-
-#### 2.6.3、Redis Sink
-
-1）pom.xml添加flink-connector-redis依赖
-
-```xml
-<dependency>
-    <groupId>org.apache.bahir</groupId>
-    <artifactId>flink-connector-redis_2.11</artifactId>
-    <version>1.0</version>
-</dependency>
-```
-
-2）实例：从文件中读取数据，存到redis中
-
-- 定义一个RedisMapper
-
-```scala
-class MyRedisMapper extends RedisMapper[SensorReading]{
-  // 定义保存数据写入redis的命令，HSET 表名 key value
-  override def getCommandDescription: RedisCommandDescription = {
-    new RedisCommandDescription(RedisCommand.HSET, "sensor_temp")
-  }
-
-  // 将温度值指定为value
-  override def getValueFromData(data: SensorReading): String = data.temperature.toString
-
-  // 将id指定为key
-  override def getKeyFromData(data: SensorReading): String = data.id
-}
-```
-
-- 从文件中读取数据，存到redis中
-
-```scala
-val env = StreamExecutionEnvironment.getExecutionEnvironment
-env.setParallelism(1)
-// 读取数据
-val inputPath = "input/sensor.txt"
-val inputStream = env.readTextFile(inputPath)
-
-// 先转换成样例类类型（简单转换操作）
-val dataStream = inputStream
-  .map( data => {
-    val arr = data.split(",")
-    SensorReading(arr(0), arr(1).toLong, arr(2).toDouble)
-  } )
-
-// 定义一个FlinkJedisConfigBase
-val conf = new FlinkJedisPoolConfig.Builder()
-  .setHost("hadoop102")
-  .setPort(6379)
-  .build()
-
-dataStream.addSink( new RedisSink[SensorReading]( conf, new MyRedisMapper ) )
-
-env.execute("redis sink test")
-```
-
-
-
-#### 2.6.4、Elasticsearch Sink
-
-1）pom.xml添加flink-connector-elasticsearch依赖
-
-```xml
-<dependency>
-    <groupId>org.apache.flink</groupId>
-    <artifactId>flink-connector-elasticsearch6_2.12</artifactId>
-    <version>1.10.1</version>
-</dependency>
-```
-
-2）
-
-```scala
-val env = StreamExecutionEnvironment.getExecutionEnvironment
-env.setParallelism(1)
-// 读取数据
-val inputPath = "D:\\Projects\\BigData\\FlinkTutorial\\src\\main\\resources\\sensor.txt"
-val inputStream = env.readTextFile(inputPath)
-
-// 先转换成样例类类型（简单转换操作）
-val dataStream = inputStream
-.map(data => {
-    val arr = data.split(",")
-    SensorReading(arr(0), arr(1).toLong, arr(2).toDouble)
-})
-
-// 定义HttpHosts
-val httpHosts = new util.ArrayList[HttpHost]()
-httpHosts.add(new HttpHost("hadoop102", 9200))
-
-// 自定义写入es的EsSinkFunction
-val myEsSinkFunc = new ElasticsearchSinkFunction[SensorReading] {
-    override def process(t: SensorReading, runtimeContext: RuntimeContext, requestIndexer: RequestIndexer): Unit = {
-        // 包装一个Map作为data source
-        val dataSource = new util.HashMap[String, String]()
-        dataSource.put("id", t.id)
-        dataSource.put("temperature", t.temperature.toString)
-        dataSource.put("ts", t.timestamp.toString)
-
-        // 创建index request，用于发送http请求
-        val indexRequest = Requests.indexRequest()
-        .index("sensor")
-        .`type`("readingdata")
-        .source(dataSource)
-
-        // 用indexer发送请求
-        requestIndexer.add(indexRequest)
-
-    }
-}
-
-dataStream.addSink(new ElasticsearchSink
-                   .Builder[SensorReading](httpHosts, myEsSinkFunc)
-                   .build()
-                  )
-
-env.execute("es sink test")
-```
-
-
-
-#### 2.6.5、JDBC Sink
-
-1）pom.xml添加mysql-connector-java依赖
-
-```xml
-<dependency>
-    <groupId>mysql</groupId>
-    <artifactId>mysql-connector-java</artifactId>
-    <version>5.1.44</version>
-</dependency>
-```
-
-2） 定义一个RichSinkFunction
-
-```scala
-class MyJdbcSinkFunc() extends RichSinkFunction[SensorReading]{
-  // 定义连接、预编译语句
-    
-  var conn: Connection = _
-  var insertStmt: PreparedStatement = _
-  var updateStmt: PreparedStatement = _
-
-  override def open(parameters: Configuration): Unit = {
-    conn = DriverManager.getConnection("jdbc:mysql://localhost:3306/test", "root", "123456")
-    insertStmt = conn.prepareStatement("insert into sensor_temp (id, temp) values (?, ?)")
-    updateStmt = conn.prepareStatement("update sensor_temp set temp = ? where id = ?")
-  }
-
-  override def invoke(value: SensorReading): Unit = {
-    // 先执行更新操作，查到就更新
-    updateStmt.setDouble(1, value.temperature)
-    updateStmt.setString(2, value.id)
-    updateStmt.execute()
-    // 如果更新没有查到数据，那么就插入
-    if( updateStmt.getUpdateCount == 0 ){
-      insertStmt.setString(1, value.id)
-      insertStmt.setDouble(2, value.temperature)
-      insertStmt.execute()
-    }
-  }
-
-  override def close(): Unit = {
-    insertStmt.close()
-    updateStmt.close()
-    conn.close()
-  }
-}
-```
-
-3）MyJdbcSinkFunc的使用
-
-```scala
-val env = StreamExecutionEnvironment.getExecutionEnvironment
-env.setParallelism(1)
-// 读取数据
-val inputPath = "D:\\Projects\\BigData\\FlinkTutorial\\src\\main\\resources\\sensor.txt"
-val inputStream = env.readTextFile(inputPath)
-
-val stream = env.addSource( new MySensorSource() )
-
-// 先转换成样例类类型（简单转换操作）
-val dataStream = inputStream
-.map(data => {
-    val arr = data.split(",")
-    SensorReading(arr(0), arr(1).toLong, arr(2).toDouble)
-})
-
-stream.addSink( new MyJdbcSinkFunc() )
-
-env.execute("jdbc sink test")
-}
-```
-
-
-
-## 三、Window
-
-### 3.1、Window概述
-
-window是一种切割无限数据为有限块进行处理的手段。
+当在分布式系统中引入状态时，自然也引入了一致性问题。
 
 ```txt
-- streaming流式计算用于处理无限数据集的数据处理引擎，无限数据集是指一种不断增长的本质上无限的数据集;
-- Window将一个无限的stream拆分成有限大小的”buckets”桶，我们可以在这些桶上做计算操作。
+- 有状态的流处理，内部每个算子任务都可以有自己的状态
+- 对于流处理器内部，状态一致性即计算结果要准确
+	- exactly once(精确一次消费，数仓实战中接触过)
+	- 容灾恢复
 ```
 
-
-
-### 3.2、Window类型
-
-1）CountWindow：按照指定的数据条数生成一个Window，与时间无关.
-
-2）TimeWindow：按照时间生成Window。
-
-- 滚动窗口（Tumbling Windows）：时间对齐，窗口长度固定，没有重叠
-
-![image-20200809102637565]https://gitee.com/wangzj6666666/bigdata-img/raw/master/flink/image-20200809102637565.png)
-
-- 滑动窗口（Sliding Windows）：时间对齐，窗口长度固定，有重叠
-
-![image-20200809102657902]https://gitee.com/wangzj6666666/bigdata-img/raw/master/flink/image-20200809102657902.png)
-
-- 会话窗口（Session Windows）：时间无对齐
-
-![image-20200809102736758]https://gitee.com/wangzj6666666/bigdata-img/raw/master/flink/image-20200809102736758.png)
-
-### 3.3、Window API
-
-#### 3.3.1、概述
-
-如何使用window：可以用 .window() 来定义一个窗口，然后基于这个 window 去做一些聚合或者其它处理操作。
+在流处理中，一致性可以分为3个级别：
 
 ```txt
-注意:
-	- window()方法必须在 keyBy 之后才能用（每个key会对应一个窗口）。
-	- window后面一般会接上reduce方法
+- at-most-once: 最多计算一次，如果发生故障不会去处理，不会去恢复丢失。
+- at-least-once: 这表示计数结果可能大于正确值，但绝不会小于正确值。也就是说，计数程序在发生故障后可能多算，但是绝不会少算。
+- exactly-once: 这指的是系统保证在发生故障后得到的计数结果与正确值一致。
 ```
 
+Flink的一个重大价值在于，它既保证了exactly-once，也具有低延迟和高吞吐的处理能力。
 
 
-#### 3.3.2、创建窗口
 
-1）窗口分配器（window assigner）
+#### 5.5.1、一致性检查点
+
+Flink 故障恢复机制的核心，就是应用状态的一致性检查点。有状态流应用的一致检查点，其实就是所有任务的状态，在某个时间点的一份拷贝（一份快照）；
 
 ```txt
-- window() 方法接收的输入参数是一个 WindowAssigner
-- WindowAssigner 负责将每条输入的数据分发到正确的 window 中
+备注：这个时间点，应该是所有任务都恰好处理完一个相同的输入数据的时候
 ```
 
-2）创建不同类型的窗口
+![image-20200810171831745](https://gitee.com/wangzj6666666/bigdata-img/raw/master/flink/image-20200810171831745.png)
 
-- 滚动时间窗口（tumbling time window）
+如图中所示：InputStream 传入数字 ，Source收集后，按照奇数偶数分别求和，如何存储状态？
+
+1）此时sum_even=2+4，sum_odd=1+3+5
+
+2）直接存储5、6、9，表示5之前的数据已经统计完，偶数是6，基数是9
+
+```txt
+不存储sum_even=2+4，sum_odd=1+3+5详细信息的原因是
+	- 实现逻辑太复杂、难度太大
+```
+
+
+
+#### 5.5.2、检查点算法
+
+一种简单的想法
+
+```txt
+暂停应用，保存状态到检查点，再重新恢复应用
+```
+
+Flink 的改进实现
+
+```txt
+- 基于 Chandy-Lamport 算法的分布式快照
+- 将检查点的保存和数据处理分离开，不暂停整个应用
+```
+
+Flink检查点算法流程：
+
+1）JobManager 会向每个 source 任务发送一条带有新检查点 ID 的消息，通过这种方式来启动检查点
+
+![image-20200810214511297](https://gitee.com/wangzj6666666/bigdata-img/raw/master/flink/image-20200810214511297.png)
+
+2）数据源（Source）将它们的状态写入检查点，并发出一个检查点 barrier
+
+3）状态后端在状态存入检查点之后，会返回通知给 Source任务，Source 任务就会向 JobManager 确认检查点完成
+
+![image-20200810214549310](https://gitee.com/wangzj6666666/bigdata-img/raw/master/flink/image-20200810214549310.png)
+
+4）分界线对齐：barrier 向下游传递，sum 任务会等待所有输入分区的 barrier 到达
+
+5）对于barrier已经到达的分区，继续到达的数据会被缓存
+
+6）而barrier尚未到达的分区，数据会被正常处理
+
+![image-20200810214624749](https://gitee.com/wangzj6666666/bigdata-img/raw/master/flink/image-20200810214624749.png)
+
+7）当收到所有输入分区的 barrier 时，任务就将其状态保存到状态后端的检查点中，然后将 barrier 继续向下游转发
+
+![image-20200810214747203](https://gitee.com/wangzj6666666/bigdata-img/raw/master/flink/image-20200810214747203.png)
+
+8）向下游转发检查点 barrier 后，任务继续正常的数据处理
+
+![image-20200810214801517](https://gitee.com/wangzj6666666/bigdata-img/raw/master/flink/image-20200810214801517.png)
+
+9）Sink 任务向 JobManager 确认状态保存到 checkpoint 完毕
+
+10）当所有任务都确认已成功将状态保存到检查点时，检查点就真正完成了
+
+![image-20200810214818933](https://gitee.com/wangzj6666666/bigdata-img/raw/master/flink/image-20200810214818933.png)
+
+#### 5.5.3、容错机制代码设置
+
+默认情况下checkpoint不开启
 
 ```scala
-.timeWindow(Time.seconds(15))
+// 开启checkpoint，已经弃用
+// 使用enableCheckpointing(interval : Long, mode: CheckpointingMode)
+// CheckpointingMode： "exactly once" and "at least once"
+env.enableCheckpointing()
+
+// checkpoint的配置
+val chkpConfig = env.getCheckpointConfig
+// 设置连续两个checkpoint之间的时间间隔
+chkpConfig.setCheckpointInterval(10000L) 
+// 设置CheckpointingMode，CheckpointingMode.EXACTLY_ONCE精确一次消费
+chkpConfig.setCheckpointingMode(CheckpointingMode.EXACTLY_ONCE) 
+// 超时时间，超过时间checkpoint就不继续做了，等下次存盘在做
+chkpConfig.setCheckpointTimeout(60000)
+// 最大同时并行的Checkpoint
+chkpConfig.setMaxConcurrentCheckpoints(2)
+// 上一个Checkpoint执行完毕 到 下一个checkponit触发执行 之间的时间间隔
+chkpConfig.setMinPauseBetweenCheckpoints(500L)
+// 状态恢复方式 true: checkpoint（自动存盘机制）、false: savepoint（手动存盘机制）
+chkpConfig.setPreferCheckpointForRecovery(true)
+// 允许多少次checkpoint失败，达到次数上限报错，默认-1
+chkpConfig.setTolerableCheckpointFailureNumber(0)
 ```
 
-- 滑动时间窗口（sliding time window）
+
 
 ```scala
-.timeWindow(Time.seconds(15), Time.seconds(3))
-```
-
-- 会话窗口（session window）
-
-```scala
-.window(EventTimeSessionWindows.withGap(Time.seconds(10))) 
-```
-
-- 滚动计数窗口（tumbling count window）
-
-```scala
-.countWindow(1)
-```
-
-- 滑动计数窗口（sliding count window）
-
-```scala
-.countWindow(10, 2)
+// 重启策略配置
+env.setRestartStrategy(RestartStrategies.fixedDelayRestart(3, 10000L))//重启三次每隔10秒重启一次
+env.setRestartStrategy(RestartStrategies.failureRateRestart(5, Time.minutes(5), Time.seconds(10)))//5分钟内重启5次，没两次之间间隔10秒
 ```
 
 
 
-#### 3.3.3、窗口函数
+#### 5.5.4、保存点
 
-窗口函数（window function）
+保存点（SavePoint）
 
-1）window function 定义了要对窗口中收集的数据做的计算操作
+Flink 还提供了可以自定义的镜像保存功能，就是保存点（savepoints）。原则上，创建保存点使用的算法与检查点完全相同，因此保存点可以认为就是具有一些额外元数据的检查点。
 
-2）可以分为两类
+- Flink不会自动创建保存点，因此用户（或者外部调度程序）必须明确地触发创建操作 。
+- 保存点是一个强大的功能。除了故障恢复外，保存点可以用于：有计划的手动备份，更新应用程序，版本迁移，暂停和重启应用，等等。
+
+
+
+### 5.6、端到端 exactly-once
+
+目前我们看到的一致性保证都是由流处理器实现的，也就是说都是在 Flink 流处理器内部保证的；而在真实应用中，流处理应用除了流处理器以外还包含了数据源（例如 Kafka）和输出到持久化系统
 
 ```txt
-- 增量聚合函数（incremental aggregation functions）（建议多使用）
-	- 每条数据到来就进行计算，保持一个简单的状态
- 	- ReduceFunction, AggregateFunction
+- 端到端的一致性保证，意味着结果的正确性贯穿了整个流处理应用的始终；每一个组件都保证了它自己的一致性；
+- 整个端到端的一致性级别取决于所有组件中一致性最弱的组件。
+```
 
-- 全窗口函数（full window functions）
-	- 先把窗口所有数据收集起来，等到计算的时候会遍历所有数据
- 	- ProcessWindowFunction
+1）内部保证 —— checkpoint
+
+2）source 端 —— 可重设数据的读取位置
+
+3）sink 端 —— 从故障恢复时，数据不会重复写入外部系统
+
+```txt
+- 幂等写入
+- 事务写入
 ```
 
 
 
-#### 3.3.4、其它可选 API
+#### 5.6.1、幂等写入
+
+所谓幂等操作，是说一个操作，可以重复执行很多次，但只导致一次结果更改，也就是说，后面再重复执行就不起作用了。
 
 ```txt
-- trigger() —— 触发器，定义 window 什么时候关闭，触发计算并输出结果
-- evictor() —— 移除器，定义移除某些数据的逻辑
-- allowedLateness() —— 允许处理迟到的数据
-- sideOutputLateData() —— 将迟到的数据放入侧输出流
-- getSideOutput() —— 获取侧输出流
+例如：key-value型数据，对key求hash值，在根据hash值确定存放位置，那么key相同的数据，无论怎么存都会存放到同一个位置
 ```
 
- 
 
-## 四、时间语义与Wartermark
 
-### 4.1、时间语义概述
+#### 5.6.2、事务写入
 
-在Flink的流式处理中，会涉及到时间的不同概念，
+事务（Transaction）
 
-**Event Time**
-
-```txt
-是事件创建的时间。它通常由事件中的时间戳描述，例如采集的日志数据中，每一条日志都会记录自己的生成时间，Flink通过时间戳分配器访问事件时间戳。
+```
+- 应用程序中一系列严密的操作，所有操作必须成功完成，否则在每个操作中所作的所有更改都会被撤消；
+- 具有原子性：一个事务中的一系列的操作要么全部成功，要么一个都不做。
 ```
 
-**Ingestion Time**：
+Flink中的事务写入实现思想
 
 ```txt
-是数据进入Flink的时间。
+构建的事务对应着 checkpoint，等到 checkpoint 真正完成的时候，才把所有对应的结果写入 sink 系统中
 ```
 
-**Processing Time**：
+实现方式
 
 ```txt
-是每一个执行基于时间操作的算子的本地系统时间，与机器(服务器)相关。
+- 预写日志
+- 两阶段提交
+```
+
+
+
+#### 5.6.3、预写日志（WAL）
+
+预写日志（Write-Ahead-Log，WAL，Hbase中也有）
+
+```txt
+- 把结果数据先当成状态保存，然后在收到 checkpoint 完成的通知时，一次性写入 sink 系统；
+- DataStream API 提供了一个模板类：GenericWriteAheadSink，来实现这种事务性 sink。
 ```
 
 ```txt
 注意：
-	- 默认的时间属性就是Processing Time
-	- 但是我们往往更关心事件时间（Event Time）	
+	- 一批写入sink，时效性降低了
+	- 一批写入sink，写到一半挂掉，数据需要重新写入，如果sink没有使用exactly-once，会造成数据重复
 ```
 
-实例：假如地铁上玩游戏，到8:22:45时已同通关到第三关，8:22:45~8:23:20又通关了5关，但是由于地铁进隧道没有信号，数据没有及时传送到服务器上，该游戏没通关三层会又奖励，最终服务器应该如何计算奖励。
-
-![image-20200809210819955]https://gitee.com/wangzj6666666/bigdata-img/raw/master/flink/image-20200809210819955.png)
-
-1）如果按照Processing Time来统计数据那么玩家只通关了三层，奖励一次，但实际上顽疾已经通关到第8层应该奖励2次，这显然不符合逻辑
-
-2）所以数据统计应该按照Event Time也就是玩家的时间来统计
 
 
+#### 5.6.4、两阶段提交（2PC）
 
-### 4.2、在代码中设置 Event Time
+两阶段提交（Two-Phase-Commit，2PC）
 
-1）我们可以直接在代码中，对执行环境调用 setStreamTimeCharacteristic 方法，设置流的时间特性
+```txt
+- 对于每个 checkpoint，sink 任务会启动一个事务，并将接下来所有接收的数据添加到事务里
+- 然后将这些数据写入外部 sink 系统，但不提交它们 —— 这时只是“预提交”
+- 当它收到 checkpoint 完成的通知时，它才正式提交事务，实现结果的真正写入
+```
 
-2）具体的时间，还需要从数据中提取时间戳（timestamp）
+```txt
+这种方式真正实现了 exactly-once，它需要一个提供事务支持的外部 sink 系统。Flink 提供了 TwoPhaseCommitSinkFunction 接口。
+```
+
+2PC 对外部 sink 系统的要求
+
+```txt
+- sink必须提供事务支持
+- 在收到 checkpoint 完成的通知之前，事务必须是“等待提交”的状态。在故障恢复的情况下，这可能需要一些时间。如果这个时候sink系统关闭
+  事务（例如超时了），那么未提交的数据就会丢失
+- sink 任务必须能够在进程失败后恢复事务，提交事务必须是幂等操作
+```
+
+#### 5.6.5、一致性对比
+
+不同 Source 和 Sink 的一致性对比
+
+![image-20200811103607912](https://gitee.com/wangzj6666666/bigdata-img/raw/master/flink/image-20200811103607912.png)
+
+
+
+#### 5.6.7、Kafka 状态一致性的保证
+
+Flink+Kafka 端到端状态一致性的保证
+
+```txt
+内部：checkpoint
+source：kafka consumer（保存偏移量）
+sink：kafka producer
+```
+
+ Kafka Exactly-once 两阶段提交步骤
+
+- 第一条数据来了之后，开启一个 kafka 的事务（transaction），正常写入 kafka 分区日志但标记为未提交，这就是“预提交”
+- jobmanager 触发 checkpoint 操作，barrier 从 source 开始向下传递，遇到 barrier 的算子将状态存入状态后端，并通知 jobmanager
+- sink 连接器收到 barrier，保存当前状态，存入 checkpoint，通知 jobmanager，并开启下一阶段的事务，用于提交下个检查点的数据
+- jobmanager 收到所有任务的通知，发出确认信息，表示 checkpoint 完成
+- sink 任务收到 jobmanager 的确认信息，正式提交这段时间的数据
+- 外部kafka关闭事务，提交的数据可以正常消费了。
+
+
+
+
+## 六、ProcessFunction API
+
+### 6.1、概述
+
+之前学习的**转换算子**是无法访问事件的时间戳信息和水位线信息的。基于此，DataStream API提供了一系列的Low-Level转换算子。可以**访问时间戳、watermark以及注册定时事件**。还可以输出**特定的一些事件**，例如超时事件等。
+
+Flink提供了8个Process Function：
+
+```txt
+- ProcessFunction （DataStream）
+- KeyedProcessFunction （KeySteam）
+- CoProcessFunction 
+- ProcessJoinFunction
+- BroadcastProcessFunction
+- KeyedBroadcastProcessFunction
+- ProcessWindowFunction
+- ProcessAllWindowFunction
+```
+
+
+
+### 6.2、KeyedProcessFunction
+
+用来操作KeyedStream，会处理流的每一个元素。
+
+1）所有的Process Function都继承自RichFunction接口，所以都有open()、close()和getRuntimeContext()等
+方法。
+
+2）KeyedProcessFunction[KEY, IN, OUT]还额外提供了两个方法:processElement、onTimer
+
+```txt
+- processElement流中的每一个元素都会调用这个方法，可以访问元素的时间戳，元素的key，以及TimerService时间
+  服务
+  
+- 定时器触发时调用
+```
+
+代码：
 
 ```scala
-val env = StreamExecutionEnvironment.getExecutionEnvironment
-env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime)
-```
+// KeyedProcessFunction功能测试
+class MyKeyedProcessFunction extends KeyedProcessFunction[String, SensorReading, String]{
+  var myState: ValueState[Int] = _
 
+  override def open(parameters: Configuration): Unit = {
+    myState = getRuntimeContext.getState(new ValueStateDescriptor[Int]("mystate", classOf[Int]))
+  }
 
+  override def processElement(value: SensorReading, ctx: KeyedProcessFunction[String, SensorReading, String]#Context, out: Collector[String]): Unit = {
+    ctx.getCurrentKey
+    ctx.timestamp()
+    ctx.timerService().currentWatermark()
+    ctx.timerService().registerEventTimeTimer(ctx.timestamp() + 60000L)
+  }
 
-### 4.3、Watermark
+  override def onTimer(timestamp: Long, ctx: KeyedProcessFunction[String, SensorReading, String]#OnTimerContext, out: Collector[String]): Unit = {
 
-什么是Watermark？就是到达窗口的时间。
-
-```txt
-备注：在大部分情况下，流处理的数据都是按照事件产生的时间顺序来的，但由于网络、分布式等原因，会导致乱序的产生。Watermark专门来解决乱序的问题。
-```
-
-```
-- Watermark是一种衡量Event Time进展的机制；
-- Watermark是用于处理乱序事件的，而正确的处理乱序事件，通常用Watermark机制结合window来实现；
-- 数据流中的Watermark用于表示timestamp小于Watermark的数据，都已经到达了，因此，window的执行也是由	Watermark触发的；
-- watermark 用来让程序自己平衡延迟和结果正确性。
-```
-
-Watermark特点：
-
-![image-20200809213711825]https://gitee.com/wangzj6666666/bigdata-img/raw/master/flink/image-20200809213711825.png)
-
-```txt
-- watermark 是一条特殊的数据记录
-- watermark 必须单调递增，以确保任务的事件时间时钟在向前推进，而不是在后退
-- watermark 与数据的时间戳相关
-```
-
-
-
-### 4.4、Watermark传递机制
-
-实例：上游有4个并行任务，中间是Task（4个分区），下游有三个并行任务，如下图所示
-
-![image-20200809213553109]https://gitee.com/wangzj6666666/bigdata-img/raw/master/flink/image-20200809213553109.png)
-
-1）Task中的每个分区都会存放一个Watermark
-
-2）当上游有的Watermark传递过来时，替换Task所有分区中的最小Watermark（minWatermark）
-
-3）将取出的当前最小minWatermark与Event-time Clock进行对比，如果minWatermark大，则更新Event-time Clock
-
-```
-Event-time Clock=minWatermark
-```
-
-4）将更后的Event-time Clock以轮询的方式发送给下游
-
-```txt
-表示当前Event-time Clock时间段之前的数据已全部到达
-```
-
-
-
-### 4.5、代码引入Watermark
-
-```scala
-val env = StreamExecutionEnvironment.getExecutionEnvironment
-env.setParallelism(1)
-// 从调用时刻开始给env创建的每一个stream追加时间特征：EventTime
-env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime)
-// 每隔5毫秒产生一个watermark
-env.getConfig.setAutoWatermarkInterval(50)
-
-// 读取数据
-val inputStream = env.socketTextStream("hadoop102", 7778)
-
-// 先转换成样例类类型（简单转换操作）
-val dataStream = inputStream
-.map( data => {
-    val arr = data.split(",")
-    SensorReading(arr(0), arr(1).toLong, arr(2).toDouble)
-} )
-//      .assignAscendingTimestamps(_.timestamp * 1000L)    // 升序数据提取时间戳
-// 要把数据中哪个字段提取成时间戳
-.assignTimestampsAndWatermarks(new BoundedOutOfOrdernessTimestampExtractor[SensorReading](Time.seconds(3)) {
-    override def extractTimestamp(element: SensorReading): Long = element.timestamp * 1000L
-})
-// 定义测输出流
-val latetag = new OutputTag[(String, Double, Long)]("late")
-// 每15秒统计一次，窗口内各传感器所有温度的最小值，以及最新的时间戳
-val resultStream = dataStream
-.map( data => (data.id, data.temperature, data.timestamp) )
-.keyBy(_._1)    // 按照二元组的第一个元素（id）分组
-.timeWindow(Time.seconds(15))  // 滚动窗口 15秒 滚动一次
-.allowedLateness(Time.minutes(1)) // 允许窗口处理迟到数据，窗口先不关
-.sideOutputLateData(latetag) // 窗口已经关闭才来，放到侧输出流里（单独收集起来，再去找之前窗口的统计结果，手动导入）
-.reduce( (curRes, newData) => (curRes._1, curRes._2.min(newData._2), newData._3) )
-
-// 从侧输出流中取数据
-resultStream.getSideOutput(latetag).print("late")
-resultStream.print("result")
-
-env.execute()
-```
-
-
-
-### 4.6、窗口起始点如何计算
-
-源码
-
-```txt
-timeWindow -> avaStream.timeWindow -> TumblingProcessingTimeWindows -> assignWindows
--> TimeWindow.getWindowStartWithOffset
-```
-
-```scala
-public static long getWindowStartWithOffset(long timestamp, long offset, long windowSize) {
-   return timestamp - (timestamp - offset + windowSize) % windowSize;
+  }
 }
 ```
 
-假设：第一条数据sensor_1,1547718199,35.8
 
-```txt
-timestamp：1547718199000
-offset：0（默认值）
-windowSize：15000（15秒）
-timestamp - (timestamp - offset + windowSize) % windowSize = 1,547,718,195,000
-所以第一窗口是：[195, 210],而不是[199, 214]
+
+
+
+3）需求：10秒之内温度时连续上升的化报警
+
+- 如果用滚动窗口，会出现下面的情况，应该报警却未报警的现象
+
+![image-20200810154855580](https://gitee.com/wangzj6666666/bigdata-img/raw/master/flink/image-20200810154855580.png)
+
+- 如果用滚动窗口，同样会出现应该报警却未报警的现象
+
+![image-20200810155335550](https://gitee.com/wangzj6666666/bigdata-img/raw/master/flink/image-20200810155335550.png)
+
+
+
+- 使用KeyedProcessFunction，当确定第一个上升温度时，定义一个定时器（判断未来10秒内是否连续上升），如果有下降温度删除定时器
+
+```scala
+object ProcessFunctionTest {
+  def main(args: Array[String]): Unit = {
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setParallelism(1)
+
+    // 读取数据
+    val inputStream = env.socketTextStream("localhost", 7777)
+
+    // 先转换成样例类类型（简单转换操作）
+    val dataStream = inputStream
+      .map( data => {
+        val arr = data.split(",")
+        SensorReading(arr(0), arr(1).toLong, arr(2).toDouble)
+      } )
+    //      .keyBy(_.id)
+    //      .process( new MyKeyedProcessFunction )
+
+    val warningStream = dataStream
+      .keyBy(_.id)
+      .process( new TempIncreWarning(10000L) )
+
+    warningStream.print()
+
+    env.execute("process function test")
+  }
+}
+
+// 实现自定义的KeyedProcessFunction
+class TempIncreWarning(interval: Long) extends KeyedProcessFunction[String, SensorReading, String]{
+  // 定义状态：保存上一个温度值进行比较，保存注册定时器的时间戳用于删除
+  lazy val lastTempState: ValueState[Double] = getRuntimeContext.getState(new ValueStateDescriptor[Double]("last-temp", classOf[Double]))
+  lazy val timerTsState: ValueState[Long] = getRuntimeContext.getState(new ValueStateDescriptor[Long]("timer-ts", classOf[Long]))
+
+  override def processElement(value: SensorReading, ctx: KeyedProcessFunction[String, SensorReading, String]#Context, out: Collector[String]): Unit = {
+    // 先取出状态
+    val lastTemp = lastTempState.value()
+    val timerTs = timerTsState.value()
+
+    // 更新温度值
+    lastTempState.update(value.temperature)
+
+    // 当前温度值和上次温度进行比较
+    if( value.temperature > lastTemp && timerTs == 0 ){
+      // 如果温度上升，且没有定时器，那么注册当前时间10s之后的定时器
+      val ts = ctx.timerService().currentProcessingTime() + interval
+      ctx.timerService().registerProcessingTimeTimer(ts)
+      timerTsState.update(ts)
+    } else if( value.temperature < lastTemp ){
+      // 如果温度下降，那么删除定时器
+      ctx.timerService().deleteProcessingTimeTimer(timerTs)
+      timerTsState.clear()
+    }
+  }
+
+  override def onTimer(timestamp: Long, ctx: KeyedProcessFunction[String, SensorReading, String]#OnTimerContext, out: Collector[String]): Unit = {
+    out.collect("传感器" + ctx.getCurrentKey + "的温度连续" + interval/1000 + "秒连续上升")
+    timerTsState.clear()
+  }
+}
 ```
 
 
+
+### 6.3、侧输出流
+
+```scala
+object SideOutputTest {
+  def main(args: Array[String]): Unit = {
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setParallelism(1)
+    env.setStateBackend(new FsStateBackend(""))
+    //    env.setStateBackend(new RocksDBStateBackend(""))
+
+    // 读取数据
+    val inputStream = env.socketTextStream("localhost", 7777)
+
+    // 先转换成样例类类型（简单转换操作）
+    val dataStream = inputStream
+      .map( data => {
+        val arr = data.split(",")
+        SensorReading(arr(0), arr(1).toLong, arr(2).toDouble)
+      } )
+
+    val highTempStream = dataStream
+      .process( new SplitTempProcessor(30.0) )
+
+    // 主输出流
+    highTempStream.print("high")
+    // 侧输出流
+    highTempStream.getSideOutput(new OutputTag[(String, Long, Double)]("low")).print("low")
+
+    env.execute("side output test")
+  }
+}
+
+// 实现自定义ProcessFunction，进行分流
+class SplitTempProcessor(threshold: Double) extends ProcessFunction[SensorReading, SensorReading]{
+  override def processElement(value: SensorReading, ctx: ProcessFunction[SensorReading, SensorReading]#Context, out: Collector[SensorReading]): Unit = {
+    if( value.temperature > threshold ){
+      // 如果当前温度值大于30，那么输出到主流
+      out.collect(value)
+    } else {
+      // 如果不超过30度，那么输出到侧输出流
+      ctx.output(new OutputTag[(String, Long, Double)]("low"), (value.id, value.timestamp, value.temperature))
+    }
+  }
+}
+
+```
 
