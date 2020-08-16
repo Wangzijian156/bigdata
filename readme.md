@@ -20,6 +20,8 @@
 
 ### 1.4、Kafka
 
+[Kafka详解](Kafka/Kafka总结.md)
+
 
 
 ## 第二章、Scala & Spark
