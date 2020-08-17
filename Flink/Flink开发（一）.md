@@ -1175,7 +1175,7 @@ window是一种切割无限数据为有限块进行处理的手段。
 	- 但是我们往往更关心事件时间（Event Time）	
 ```
 
-实例：假如地铁上玩游戏，到8:22:45时已同通关到第三关，8:22:45~8:23:20又通关了5关，但是由于地铁进隧道没有信号，数据没有及时传送到服务器上，该游戏没通关三层会又奖励，最终服务器应该如何计算奖励。
+实例：假如地铁上玩游戏，到8:22:45时已同通关到第三关，8:22:45~8:23:20又通关了5关，但是由于地铁进隧道没有信号，数据没有及时传送到服务器上，该游每通关三层会有奖励，最终服务器应该如何计算奖励。
 
 ![image-20200809210819955](https://gitee.com/wangzj6666666/bigdata-img/raw/master/flink/image-20200809210819955.png)
 
@@ -1208,9 +1208,9 @@ env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime)
 
 ```
 - Watermark是一种衡量Event Time进展的机制；
-- Watermark是用于处理乱序事件的，而正确的处理乱序事件，通常用Watermark机制结合window来实现；
-- 数据流中的Watermark用于表示timestamp小于Watermark的数据，都已经到达了，因此，window的执行也是由	Watermark触发的；
-- watermark 用来让程序自己平衡延迟和结果正确性。
+- Watermark是用于处理乱序事件的，而正确的处理乱序事件，通常用Watermark机制结合Window来实现；
+- 数据流中的Watermark用于表示Timestamp小于Watermark的数据，都已经到达了，因此，window的执行也是由Watermark触发的；
+- Watermark 用来让程序自己平衡延迟和结果正确性。
 ```
 
 Watermark特点：
@@ -1218,9 +1218,9 @@ Watermark特点：
 ![image-20200809213711825](https://gitee.com/wangzj6666666/bigdata-img/raw/master/flink/image-20200809213711825.png)
 
 ```txt
-- watermark 是一条特殊的数据记录
-- watermark 必须单调递增，以确保任务的事件时间时钟在向前推进，而不是在后退
-- watermark 与数据的时间戳相关
+- Watermark 是一条特殊的数据记录
+- Watermark 必须单调递增，以确保任务的事件时间时钟在向前推进，而不是在后退
+- Watermark 与数据的时间戳相关
 ```
 
 

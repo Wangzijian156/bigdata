@@ -10,8 +10,9 @@
 	- [三、Redis基本操作](#三redis基本操作)
 		- [3.1、Redis的数据库与选择](#31redis的数据库与选择)
 		- [3.2、Redis五大数据类型](#32redis五大数据类型)
-		- [3.3、常见配置](#33常见配置)
-		- [3.4、Jedis的使用](#34jedis的使用)
+		- [3.3、位运算](#33位运算)
+		- [3.4、常见配置](#34常见配置)
+		- [3.5、Jedis的使用](#35jedis的使用)
 
 ## 一、Redis简介
 
@@ -355,7 +356,45 @@ zrevrange article_top:daye 0 9
 
 
 
-### 3.3、常见配置
+### 3.3、位运算
+
+```txt
+getbit key offset
+setbit key offset
+```
+
+键值对如下：
+
+```
+("mykey", "hello")
+```
+
+```txt
+getbit mykey 0  => 0
+getbit mykey 1  => 1
+getbit mykey 2  => 1
+getbit mykey 3  => 0
+getbit mykey 4	=> 1     => 0X68 (十六进制) => 'h' (ASCII) => 一个字符一个字节（8bits）
+getbit mykey 5	=> 0
+getbit mykey 6	=> 0
+getbit mykey 7	=> 0
+```
+
+修改位上的值 =>最终value也会发生改变
+
+```txt
+setbit mykey 2 1
+setbit mykey 4 0
+setbit mykey 5 1
+```
+
+
+
+![image-20200817100518238](https://gitee.com/wangzj6666666/bigdata-img/raw/master/redis/image-20200817100518238.png)
+
+
+
+### 3.4、常见配置
 
 redis.conf 配置项说明如下：
 
@@ -559,7 +598,7 @@ include /path/to/local.conf
 
 
 
-### 3.4、Jedis的使用
+### 3.5、Jedis的使用
 
 1）idea创建空的maven项目
 
